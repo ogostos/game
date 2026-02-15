@@ -1,154 +1,453 @@
-import type { FactPair } from "@/lib/shared/types";
+import generatedFactsSource from "@/data/facts/fact-or-fake.generated.json";
+import type { FactCard, FactDeck, FactKind, Language } from "@/lib/shared/types";
 
-export const FACT_OR_FAKE_FACTS: FactPair[] = [
+interface BilingualText {
+  en: string;
+  ru: string;
+}
+
+interface LocalizedText {
+  en: string;
+  ru?: string;
+}
+
+interface BilingualFactPair {
+  id: string;
+  category: BilingualText;
+  realFact: BilingualText;
+  fakeFact: BilingualText;
+}
+
+interface GeneratedFactSource {
+  id: string;
+  category: LocalizedText;
+  text: LocalizedText;
+}
+
+interface GeneratedFactsPayload {
+  generatedAt?: string;
+  source?: string;
+  realFacts?: GeneratedFactSource[];
+  fakeFacts?: GeneratedFactSource[];
+}
+
+interface FactSource {
+  id: string;
+  category: LocalizedText;
+  text: LocalizedText;
+  kind: FactKind;
+}
+
+const FACT_OR_FAKE_SOURCE: BilingualFactPair[] = [
   {
     id: "ff-001",
-    category: "Природа",
-    realFact: "У осьминога три сердца и голубая кровь.",
-    fakeFact: "Осьминог может прожить две недели без воды благодаря запасу кислорода в щупальцах."
+    category: { en: "Nature", ru: "Природа" },
+    realFact: {
+      en: "Octopuses have three hearts and blue blood.",
+      ru: "У осьминога три сердца и голубая кровь."
+    },
+    fakeFact: {
+      en: "Octopuses can survive two weeks out of water by storing oxygen in their tentacles.",
+      ru: "Осьминог может прожить две недели без воды благодаря запасу кислорода в щупальцах."
+    }
   },
   {
     id: "ff-002",
-    category: "История",
-    realFact: "Самая короткая война в истории длилась около 38 минут.",
-    fakeFact: "Наполеон продал Эйфелеву башню, чтобы финансировать военную кампанию."
+    category: { en: "History", ru: "История" },
+    realFact: {
+      en: "The shortest war in history lasted about 38 minutes.",
+      ru: "Самая короткая война в истории длилась около 38 минут."
+    },
+    fakeFact: {
+      en: "Napoleon once sold the Eiffel Tower to fund a military campaign.",
+      ru: "Наполеон продал Эйфелеву башню, чтобы финансировать военную кампанию."
+    }
   },
   {
     id: "ff-003",
-    category: "Космос",
-    realFact: "Сутки на Венере длиннее, чем год на Венере.",
-    fakeFact: "На Луне есть действующие вулканы, которые извергаются каждые 10 лет."
+    category: { en: "Space", ru: "Космос" },
+    realFact: {
+      en: "A day on Venus is longer than a year on Venus.",
+      ru: "Сутки на Венере длиннее, чем год на Венере."
+    },
+    fakeFact: {
+      en: "The Moon has active volcanoes that erupt every decade.",
+      ru: "На Луне есть действующие вулканы, которые извергаются каждые 10 лет."
+    }
   },
   {
     id: "ff-004",
-    category: "Животные",
-    realFact: "Помет вомбата имеет форму кубиков.",
-    fakeFact: "Пингвины узнают свое яйцо только по цветному узору скорлупы."
+    category: { en: "Animals", ru: "Животные" },
+    realFact: {
+      en: "Wombat poop is cube-shaped.",
+      ru: "Помет вомбата имеет форму кубиков."
+    },
+    fakeFact: {
+      en: "Penguins can identify their own egg by color pattern alone.",
+      ru: "Пингвины узнают свое яйцо только по цветному узору скорлупы."
+    }
   },
   {
     id: "ff-005",
-    category: "Еда",
-    realFact: "Мед может храниться тысячи лет и не портиться.",
-    fakeFact: "Соль не содержит калорий, потому что организм вообще не способен ее усвоить."
+    category: { en: "Food", ru: "Еда" },
+    realFact: {
+      en: "Honey can last for thousands of years without spoiling.",
+      ru: "Мед может храниться тысячи лет и не портиться."
+    },
+    fakeFact: {
+      en: "Salt has zero calories because the body cannot digest it at all.",
+      ru: "Соль не содержит калорий, потому что организм вообще не способен ее усвоить."
+    }
   },
   {
     id: "ff-006",
-    category: "Наука",
-    realFact: "Бананы слегка радиоактивны из-за изотопа калия-40.",
-    fakeFact: "Морковь светится под ультрафиолетом из-за витамина A."
+    category: { en: "Science", ru: "Наука" },
+    realFact: {
+      en: "Bananas are naturally slightly radioactive due to potassium-40.",
+      ru: "Бананы слегка радиоактивны из-за изотопа калия-40."
+    },
+    fakeFact: {
+      en: "Carrots glow under UV light because of their vitamin A content.",
+      ru: "Морковь светится под ультрафиолетом из-за витамина A."
+    }
   },
   {
     id: "ff-007",
-    category: "География",
-    realFact: "В Канаде больше озер, чем во всех остальных странах вместе.",
-    fakeFact: "В Исландии нет комаров, потому что вулканическая почва полностью их отпугивает."
+    category: { en: "Geography", ru: "География" },
+    realFact: {
+      en: "Canada has more lakes than the rest of the world combined.",
+      ru: "В Канаде больше озер, чем во всех остальных странах вместе."
+    },
+    fakeFact: {
+      en: "Iceland has no mosquitoes because volcanic soil repels them naturally.",
+      ru: "В Исландии нет комаров, потому что вулканическая почва полностью их отпугивает."
+    }
   },
   {
     id: "ff-008",
-    category: "Человек",
-    realFact: "Отпечатки пальцев формируются до рождения и не меняются всю жизнь.",
-    fakeFact: "После 25 лет человек перестает формировать новые клетки мозга."
+    category: { en: "Human Body", ru: "Человек" },
+    realFact: {
+      en: "Fingerprints form before birth and remain unique for life.",
+      ru: "Отпечатки пальцев формируются до рождения и не меняются всю жизнь."
+    },
+    fakeFact: {
+      en: "Humans stop forming new brain cells after age 25.",
+      ru: "После 25 лет человек перестает формировать новые клетки мозга."
+    }
   },
   {
     id: "ff-009",
-    category: "Технологии",
-    realFact: "Первый компьютерный баг был настоящей молью в реле машины.",
-    fakeFact: "Wi-Fi был изобретен раньше, чем электрическая лампа накаливания."
+    category: { en: "Technology", ru: "Технологии" },
+    realFact: {
+      en: "The first computer bug was an actual moth found in a machine.",
+      ru: "Первый компьютерный баг был настоящей молью в реле машины."
+    },
+    fakeFact: {
+      en: "Wi-Fi was invented before the incandescent light bulb.",
+      ru: "Wi-Fi был изобретен раньше, чем электрическая лампа накаливания."
+    }
   },
   {
     id: "ff-010",
-    category: "Язык",
-    realFact: "Слово \"alphabet\" происходит от первых двух греческих букв: alpha и beta.",
-    fakeFact: "Русский язык официально признан единственным языком в мире без немых букв."
+    category: { en: "Language", ru: "Язык" },
+    realFact: {
+      en: "The word \"alphabet\" comes from the Greek letters alpha and beta.",
+      ru: "Слово \"alphabet\" происходит от первых двух греческих букв: alpha и beta."
+    },
+    fakeFact: {
+      en: "English is the only language with silent letters in common words.",
+      ru: "Русский язык официально признан единственным языком в мире без немых букв."
+    }
   },
   {
     id: "ff-011",
-    category: "Океан",
-    realFact: "Более 80% мирового океана до сих пор исследовано слабо.",
-    fakeFact: "На дне Марианской впадины теплая вода из-за повсеместных магматических трещин."
+    category: { en: "Ocean", ru: "Океан" },
+    realFact: {
+      en: "More than 80% of the ocean remains poorly explored.",
+      ru: "Более 80% мирового океана до сих пор исследовано слабо."
+    },
+    fakeFact: {
+      en: "The Mariana Trench is warm at the bottom because of magma vents everywhere.",
+      ru: "На дне Марианской впадины теплая вода из-за повсеместных магматических трещин."
+    }
   },
   {
     id: "ff-012",
-    category: "Погода",
-    realFact: "Молния примерно в пять раз горячее поверхности Солнца.",
-    fakeFact: "Гром слышен максимум в радиусе одного километра от удара молнии."
+    category: { en: "Weather", ru: "Погода" },
+    realFact: {
+      en: "Lightning is about five times hotter than the surface of the Sun.",
+      ru: "Молния примерно в пять раз горячее поверхности Солнца."
+    },
+    fakeFact: {
+      en: "Thunder can only be heard up to one kilometer from a strike.",
+      ru: "Гром слышен максимум в радиусе одного километра от удара молнии."
+    }
   },
   {
     id: "ff-013",
-    category: "Искусство",
-    realFact: "На портрете Моны Лизы почти не видно бровей.",
-    fakeFact: "Ван Гог при жизни не продал ни одной картины."
+    category: { en: "Art", ru: "Искусство" },
+    realFact: {
+      en: "The Mona Lisa has no clearly visible eyebrows.",
+      ru: "На портрете Моны Лизы почти не видно бровей."
+    },
+    fakeFact: {
+      en: "Van Gogh sold no paintings during his lifetime.",
+      ru: "Ван Гог при жизни не продал ни одной картины."
+    }
   },
   {
     id: "ff-014",
-    category: "Спорт",
-    realFact: "Ямочки на мячах для гольфа уменьшают сопротивление воздуха.",
-    fakeFact: "Баскетбольные кольца изначально были на высоте 2,5 метра и позже подняты."
+    category: { en: "Sports", ru: "Спорт" },
+    realFact: {
+      en: "Golf balls have dimples to reduce drag and improve lift.",
+      ru: "Ямочки на мячах для гольфа уменьшают сопротивление воздуха."
+    },
+    fakeFact: {
+      en: "Basketball hoops were originally 2.5 meters high and later raised.",
+      ru: "Баскетбольные кольца изначально были на высоте 2,5 метра и позже подняты."
+    }
   },
   {
     id: "ff-015",
-    category: "Транспорт",
-    realFact: "Первый штраф за превышение скорости выписали за скорость 8 миль в час.",
-    fakeFact: "Ремни безопасности изначально придумали для конных экипажей."
+    category: { en: "Transport", ru: "Транспорт" },
+    realFact: {
+      en: "The first speeding ticket was issued for driving 8 mph.",
+      ru: "Первый штраф за превышение скорости выписали за скорость 8 миль в час."
+    },
+    fakeFact: {
+      en: "Seat belts were first invented for horse-drawn carriages.",
+      ru: "Ремни безопасности изначально придумали для конных экипажей."
+    }
   },
   {
     id: "ff-016",
-    category: "Книги",
-    realFact: "Первым романом, напечатанным на машинке, считают \"Приключения Тома Сойера\".",
-    fakeFact: "Шекспир писал все пьесы строго в хронологическом порядке их событий."
+    category: { en: "Books", ru: "Книги" },
+    realFact: {
+      en: "The first novel typed on a typewriter is often cited as Tom Sawyer.",
+      ru: "Первым романом, напечатанным на машинке, считают \"Приключения Тома Сойера\"."
+    },
+    fakeFact: {
+      en: "Shakespeare wrote all his plays in strict story chronology.",
+      ru: "Шекспир писал все пьесы строго в хронологическом порядке их событий."
+    }
   },
   {
     id: "ff-017",
-    category: "Музыка",
-    realFact: "Моцарт написал первые музыкальные произведения примерно в пять лет.",
-    fakeFact: "Стандартное пианино во всем мире всегда имеет ровно 100 клавиш."
+    category: { en: "Music", ru: "Музыка" },
+    realFact: {
+      en: "Mozart wrote his first music pieces at around age five.",
+      ru: "Моцарт написал первые музыкальные произведения примерно в пять лет."
+    },
+    fakeFact: {
+      en: "A standard piano always has exactly 100 keys.",
+      ru: "Стандартное пианино во всем мире всегда имеет ровно 100 клавиш."
+    }
   },
   {
     id: "ff-018",
-    category: "Математика",
-    realFact: "Понятие нуля независимо появлялось в нескольких древних цивилизациях.",
-    fakeFact: "Доказано, что число пи начинает повторяться после триллиона знаков."
+    category: { en: "Math", ru: "Математика" },
+    realFact: {
+      en: "Zero was invented independently in multiple ancient civilizations.",
+      ru: "Понятие нуля независимо появлялось в нескольких древних цивилизациях."
+    },
+    fakeFact: {
+      en: "Pi has been proven to start repeating after one trillion digits.",
+      ru: "Доказано, что число пи начинает повторяться после триллиона знаков."
+    }
   },
   {
     id: "ff-019",
-    category: "Архитектура",
-    realFact: "Великую Китайскую стену нельзя увидеть невооруженным глазом из космоса.",
-    fakeFact: "Пизанская башня наклонена, потому что одну ее сторону строили короче намеренно."
+    category: { en: "Architecture", ru: "Архитектура" },
+    realFact: {
+      en: "The Great Wall of China is not visible from space with the naked eye.",
+      ru: "Великую Китайскую стену нельзя увидеть невооруженным глазом из космоса."
+    },
+    fakeFact: {
+      en: "The Leaning Tower of Pisa leans because one side is intentionally shorter.",
+      ru: "Пизанская башня наклонена, потому что одну ее сторону строили короче намеренно."
+    }
   },
   {
     id: "ff-020",
-    category: "Медицина",
-    realFact: "Изначально аспирин получили из коры ивы.",
-    fakeFact: "Аппендикс не имеет никакой связи с иммунной системой."
+    category: { en: "Medicine", ru: "Медицина" },
+    realFact: {
+      en: "Aspirin was originally derived from willow bark.",
+      ru: "Изначально аспирин получили из коры ивы."
+    },
+    fakeFact: {
+      en: "The appendix has no known connection to the immune system.",
+      ru: "Аппендикс не имеет никакой связи с иммунной системой."
+    }
   },
   {
     id: "ff-021",
-    category: "Культура",
-    realFact: "Квадратные арбузы в Японии выращивают в специальных формах.",
-    fakeFact: "Печенье с предсказаниями придумали в древнем Китае и оттуда экспортировали в США."
+    category: { en: "Culture", ru: "Культура" },
+    realFact: {
+      en: "Square watermelons in Japan are grown in box-shaped molds.",
+      ru: "Квадратные арбузы в Японии выращивают в специальных формах."
+    },
+    fakeFact: {
+      en: "Fortune cookies were invented in ancient China and exported to the U.S.",
+      ru: "Печенье с предсказаниями придумали в древнем Китае и оттуда экспортировали в США."
+    }
   },
   {
     id: "ff-022",
-    category: "Биология",
-    realFact: "Некоторые черепахи во время зимовки могут получать кислород через клоаку.",
-    fakeFact: "Хамелеоны меняют цвет только чтобы сливаться с фоном."
+    category: { en: "Biology", ru: "Биология" },
+    realFact: {
+      en: "Some turtles can absorb oxygen through their cloaca during hibernation.",
+      ru: "Некоторые черепахи во время зимовки могут получать кислород через клоаку."
+    },
+    fakeFact: {
+      en: "Chameleons only change color to match their background.",
+      ru: "Хамелеоны меняют цвет только чтобы сливаться с фоном."
+    }
   },
   {
     id: "ff-023",
-    category: "Экономика",
-    realFact: "Одни из первых форм подоходного налога существовали еще в Древнем Египте.",
-    fakeFact: "Бумажные деньги впервые появились в Европе в эпоху Возрождения."
+    category: { en: "Economics", ru: "Экономика" },
+    realFact: {
+      en: "Early forms of income tax existed in Ancient Egypt.",
+      ru: "Одни из первых форм подоходного налога существовали еще в Древнем Египте."
+    },
+    fakeFact: {
+      en: "Paper money was first invented in Renaissance Europe.",
+      ru: "Бумажные деньги впервые появились в Европе в эпоху Возрождения."
+    }
   },
   {
     id: "ff-024",
-    category: "Кино",
-    realFact: "Фильм \"Психо\" стал первым фильмом в США, где показали смывающийся туалет.",
-    fakeFact: "Первым полнометражным фильмом в истории считается комедия 1925 года."
+    category: { en: "Cinema", ru: "Кино" },
+    realFact: {
+      en: "Psycho was the first U.S. film to show a flushing toilet.",
+      ru: "Фильм \"Психо\" стал первым фильмом в США, где показали смывающийся туалет."
+    },
+    fakeFact: {
+      en: "The first feature-length film ever made was a 1925 comedy.",
+      ru: "Первым полнометражным фильмом в истории считается комедия 1925 года."
+    }
   },
   {
     id: "ff-025",
-    category: "Изобретения",
-    realFact: "Пузырчатую пленку изначально пытались продавать как фактурные обои.",
-    fakeFact: "Микроволновку изобрели специально для растапливания шоколада на фабриках."
+    category: { en: "Inventions", ru: "Изобретения" },
+    realFact: {
+      en: "Bubble wrap was originally invented as textured wallpaper.",
+      ru: "Пузырчатую пленку изначально пытались продавать как фактурные обои."
+    },
+    fakeFact: {
+      en: "The microwave oven was invented to melt chocolate in factories.",
+      ru: "Микроволновку изобрели специально для растапливания шоколада на фабриках."
+    }
   }
 ];
+
+function asLocalizedText(value: unknown): LocalizedText | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  if (typeof candidate.en !== "string") {
+    return null;
+  }
+
+  if (candidate.ru !== undefined && typeof candidate.ru !== "string") {
+    return null;
+  }
+
+  return {
+    en: candidate.en,
+    ru: typeof candidate.ru === "string" ? candidate.ru : undefined
+  };
+}
+
+function toGeneratedFacts(value: unknown, kind: FactKind): FactSource[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const facts: FactSource[] = [];
+
+  for (const row of value) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+
+    const candidate = row as Record<string, unknown>;
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+    const category = asLocalizedText(candidate.category);
+    const text = asLocalizedText(candidate.text);
+
+    if (!id || !category || !text) {
+      continue;
+    }
+
+    facts.push({
+      id,
+      category,
+      text,
+      kind
+    });
+  }
+
+  return facts;
+}
+
+function localizeText(text: LocalizedText, language: Language): string {
+  return language === "ru" ? text.ru ?? text.en : text.en;
+}
+
+function toFactCard(fact: FactSource, language: Language): FactCard {
+  return {
+    id: fact.id,
+    category: localizeText(fact.category, language),
+    text: localizeText(fact.text, language),
+    kind: fact.kind
+  };
+}
+
+function dedupeById(facts: FactSource[]): FactSource[] {
+  const seen = new Set<string>();
+
+  return facts.filter((fact) => {
+    if (seen.has(fact.id)) {
+      return false;
+    }
+
+    seen.add(fact.id);
+    return true;
+  });
+}
+
+const curatedRealFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
+  id: `${fact.id}-real`,
+  category: fact.category,
+  text: fact.realFact,
+  kind: "real"
+}));
+
+const curatedFakeFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
+  id: `${fact.id}-fake`,
+  category: fact.category,
+  text: fact.fakeFact,
+  kind: "fake"
+}));
+
+const generatedFacts = generatedFactsSource as GeneratedFactsPayload;
+const generatedRealFacts = toGeneratedFacts(generatedFacts.realFacts, "real");
+const generatedFakeFacts = toGeneratedFacts(generatedFacts.fakeFacts, "fake");
+
+const REAL_FACT_SOURCE = dedupeById([...curatedRealFacts, ...generatedRealFacts]);
+const FAKE_FACT_SOURCE = dedupeById([...curatedFakeFacts, ...generatedFakeFacts]);
+
+export const FACT_OR_FAKE_REAL_FACT_COUNT = REAL_FACT_SOURCE.length;
+export const FACT_OR_FAKE_FAKE_FACT_COUNT = FAKE_FACT_SOURCE.length;
+export const FACT_OR_FAKE_FACT_COUNT = FACT_OR_FAKE_REAL_FACT_COUNT;
+
+export function getFactOrFakeDeck(language: Language): FactDeck {
+  return {
+    realFacts: REAL_FACT_SOURCE.map((fact) => toFactCard(fact, language)),
+    fakeFacts: FAKE_FACT_SOURCE.map((fact) => toFactCard(fact, language))
+  };
+}

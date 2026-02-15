@@ -16,13 +16,13 @@ const bodyFont = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Игровая коробка: Импостер",
-  description: "Мобильные социальные игры с комнатами и раундами в реальном времени."
+  title: "Imposter Game Box",
+  description: "Mobile-first social party games with room-based realtime rounds."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="en">
       <body className={`${displayFont.variable} ${bodyFont.variable}`}>{children}</body>
     </html>
   );

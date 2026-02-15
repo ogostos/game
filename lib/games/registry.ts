@@ -1,14 +1,13 @@
-import { FACT_OR_FAKE_FACTS } from "@/lib/games/fact-or-fake/facts";
 import type { GameId, GameSummary } from "@/lib/shared/types";
 
 const GAMES: GameSummary[] = [
   {
     id: "fact-or-fake",
-    title: "Правда или Фейк",
-    description: "Найдите игрока с поддельным фактом до завершения голосования.",
+    title: "Fact or Fake",
+    description: "Find the player with fake information before votes are locked.",
     minPlayers: 3,
     maxImposters: 3,
-    factCount: FACT_OR_FAKE_FACTS.length
+    factCount: 10068
   }
 ];
 
@@ -18,12 +17,4 @@ export function listGames(): GameSummary[] {
 
 export function getGame(gameId: GameId): GameSummary | undefined {
   return GAMES.find((game) => game.id === gameId);
-}
-
-export function getFactsForGame(gameId: GameId) {
-  if (gameId === "fact-or-fake") {
-    return FACT_OR_FAKE_FACTS;
-  }
-
-  return [];
 }

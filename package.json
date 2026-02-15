@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "facts:extract:epub": "node scripts/facts/extract-epub.mjs",
+    "facts:build:epub": "node scripts/facts/build-epub-dataset.mjs",
+    "facts:fetch:wikidata": "node scripts/facts/fetch-wikidata-sparql.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.0",

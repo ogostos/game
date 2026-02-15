@@ -1,12 +1,15 @@
 export type GameId = "fact-or-fake";
+export type Language = "en" | "ru";
 
 export type RoomPhase = "lobby" | "discussion" | "voting" | "results";
 
 export type PlayerRole = "truth" | "imposter";
+export type FactKind = "real" | "fake";
 
 export interface RoomSettings {
   discussionMinutes: number;
   imposters: number;
+  language: Language;
 }
 
 export interface GameSummary {
@@ -18,11 +21,16 @@ export interface GameSummary {
   factCount: number;
 }
 
-export interface FactPair {
+export interface FactCard {
   id: string;
   category: string;
-  realFact: string;
-  fakeFact: string;
+  text: string;
+  kind: FactKind;
+}
+
+export interface FactDeck {
+  realFacts: FactCard[];
+  fakeFacts: FactCard[];
 }
 
 export interface PlayerRecord {
@@ -37,8 +45,12 @@ export interface AssignmentRecord {
   card: string;
   factId: string;
   category: string;
-  realFact: string;
-  fakeFact: string;
+  factKind: FactKind;
+}
+
+export interface RoundFactsSummary {
+  real: FactCard[];
+  fake: FactCard[];
 }
 
 export interface RoundResult {
@@ -46,7 +58,7 @@ export interface RoundResult {
   voteCounts: Record<string, number>;
   imposters: string[];
   cards: Record<string, AssignmentRecord>;
-  facts: FactPair[];
+  facts: RoundFactsSummary;
 }
 
 export interface RoundRecord {
@@ -91,13 +103,14 @@ export interface PublicRound {
   votes: Record<string, string> | null;
   voteCounts: Record<string, number> | null;
   cards: Record<string, AssignmentRecord> | null;
-  facts: FactPair[] | null;
+  facts: RoundFactsSummary | null;
 }
 
 export interface RoomView {
   joined: boolean;
   roomCode: string;
   gameId: GameId;
+  language: Language;
   version: number;
   phase: RoomPhase;
   settings: RoomSettings;
@@ -116,6 +129,7 @@ export type RoomAction =
       type: "update_settings";
       discussionMinutes: number;
       imposters: number;
+      language: Language;
     }
   | {
       type: "start_round";
@@ -149,6 +163,7 @@ export interface CreateRoomInput {
   displayName: string;
   gameId: GameId;
   password?: string;
+  language?: Language;
 }
 
 export interface JoinRoomInput {
@@ -165,7 +180,8 @@ export interface ActionInput {
 
 export const DEFAULT_SETTINGS: RoomSettings = {
   discussionMinutes: 2,
-  imposters: 1
+  imposters: 1,
+  language: "en"
 };
 
 export const MIN_PLAYERS = 3;

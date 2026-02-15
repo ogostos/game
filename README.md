@@ -1,63 +1,100 @@
 # Imposter Game Box
 
-Веб-игра для компании на Next.js, готовая к деплою на Vercel.
+Browser-based social party game built with Next.js and ready for Vercel.
 
-## Что реализовано
+## Current MVP
 
-- Главная страница с архитектурой под несколько игровых режимов
-- Режим #1: `Правда или Фейк`
-- Вход без авторизации (имя + код комнаты + опциональный пароль)
-- Лобби и контроль хоста:
-  - Таймер обсуждения (1-5 минут)
-  - Количество импостеров
-  - Старт раунда
-- Управление обсуждением во время игры:
-  - Досрочно завершить обсуждение
-  - Продлить обсуждение (+30 сек / +1 мин)
-- Полный цикл раунда:
-  - Лобби -> Обсуждение -> Голосование -> Результаты
-- Уникальная раздача фактов:
-  - В каждом раунде каждый игрок получает свой уникальный факт
-- Синхронизация комнаты в реальном времени через long polling
-- Хранилище комнат:
-  - In-memory (локально)
-  - Upstash Redis (рекомендуется для продакшена)
+- Game-box home page (multi-game ready architecture)
+- Game mode #1: `Fact or Fake`
+- No-auth room flow (room code + optional password + display name)
+- Host controls:
+  - Discussion timer (1-5 minutes)
+  - Number of imposters
+  - Room fact language (`EN` / `RU`)
+  - Start round / next round / back to lobby
+- In-round controls:
+  - End discussion early
+  - Extend discussion (`+30s`, `+60s`)
+- Full phase lifecycle:
+  - Lobby -> Discussion -> Voting -> Results
+- Unique facts per player in each round
+- Bilingual UI with user language switch (`EN` / `RU`)
+- Serverless realtime sync (long polling)
+- Storage abstraction:
+  - In-memory (local dev)
+  - Upstash Redis (recommended for production)
 
-## Где хранится база фактов
+## Facts Database
 
-- Файл: `lib/games/fact-or-fake/facts.ts`
-- Тип хранения: пока хардкод в репозитории (без внешней БД)
-- Количество фактов: `25`
+Facts now use two independent pools:
 
-## Локальный запуск
+- `realFacts[]` for truth players
+- `fakeFacts[]` for imposters
+
+Current generated dataset:
+
+- Runtime file: `data/facts/fact-or-fake.generated.json`
+- Real facts: `10043`
+- Fake facts: `5000`
+
+Notes:
+
+- Seed curated facts are still stored in `lib/games/fact-or-fake/facts.ts`.
+- Wikidata imports are bilingual (`en` + `ru`).
+- EPUB-derived facts currently mirror English text in RU fields until a dedicated translation pass is added.
+
+## Fact Expansion Workflow
+
+1) Extract from EPUB:
+
+```bash
+npm run facts:extract:epub -- "/Users/kmarkosyan/Downloads/The_Book_of_General_Ignorance.epub" data/facts/book-candidates.json
+```
+
+2) Build local dataset from EPUB:
+
+```bash
+npm run facts:build:epub -- data/facts/book-candidates.json data/facts/fact-or-fake.generated.json
+```
+
+3) Import bilingual Wikidata facts via SPARQL:
+
+```bash
+npm run facts:fetch:wikidata -- data/facts/fact-or-fake.generated.json
+```
+
+Full details: `scripts/facts/README.md`
+
+## Local Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-Откройте [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
 
-## Деплой на Vercel
+## Deploying to Vercel
 
-Для продакшена рекомендуется Redis, иначе состояние комнат будет нестабильным на нескольких инстансах.
-
-Переменные окружения:
+For stable multiplayer behavior in production, configure Redis:
 
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-## API комнаты
+Without these, room state is in-memory and can be unreliable across multiple server instances.
+
+## Room API
 
 - `POST /api/rooms/create`
 - `POST /api/rooms/join`
 - `POST /api/rooms/[code]/action`
 - `GET /api/rooms/[code]/sync?sessionId=...&since=...`
 
-## Структура проекта
+## Project Structure
 
-- `app/` - страницы, layout и API роуты
-- `components/` - клиентские UI-компоненты
-- `lib/shared/` - общие типы
-- `lib/games/` - реестр игр и база фактов
-- `lib/server/` - игровая логика и хранилище
+- `app/` - pages, layout, API routes
+- `components/` - client UI
+- `lib/shared/` - shared types and i18n helpers
+- `lib/games/` - game registry and fact data
+- `lib/server/` - room engine and storage logic
+- `scripts/facts/` - fact extraction and curation helpers

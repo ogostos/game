@@ -1,4 +1,6 @@
-import { getFactsForGame, getGame } from "@/lib/games/registry";
+import { normalizeLanguage } from "@/lib/shared/i18n/language";
+import { getGame } from "@/lib/games/registry";
+import { getFactsForGame } from "@/lib/games/facts";
 import { AppError } from "@/lib/server/errors";
 import { getRoomStore } from "@/lib/server/store";
 import {
@@ -16,7 +18,8 @@ import {
   type ActionInput,
   type AssignmentRecord,
   type CreateRoomInput,
-  type FactPair,
+  type FactCard,
+  type FactDeck,
   type JoinRoomInput,
   type PlayerRecord,
   type RoomRecord,
@@ -33,7 +36,7 @@ function requireSessionId(sessionId: string): string {
   const value = sessionId.trim();
 
   if (!value) {
-    throw new AppError(400, "Отсутствует идентификатор сессии.");
+    throw new AppError(400, "Missing session id.");
   }
 
   return value;
@@ -61,17 +64,20 @@ function shuffle<T>(values: T[]): T[] {
   return copy;
 }
 
-function pickFactsForRound(gameId: RoomRecord["gameId"], requiredCount: number, recentFactIds: Set<string>): FactPair[] {
-  const facts = getFactsForGame(gameId);
-
+function pickFromPool(
+  facts: FactCard[],
+  recentFactIds: Set<string>,
+  requiredCount: number,
+  kindLabel: "real" | "fake"
+): FactCard[] {
   if (facts.length === 0) {
-    throw new AppError(500, "Для этой игры не настроены факты.");
+    throw new AppError(500, `No ${kindLabel} facts configured for this game.`);
   }
 
   if (facts.length < requiredCount) {
     throw new AppError(
       409,
-      `Недостаточно фактов для уникальной раздачи. Нужно минимум ${requiredCount}, доступно ${facts.length}.`
+      `Not enough ${kindLabel} facts for unique dealing. Need at least ${requiredCount}, available ${facts.length}.`
     );
   }
 
@@ -79,6 +85,21 @@ function pickFactsForRound(gameId: RoomRecord["gameId"], requiredCount: number, 
   const pool = candidates.length >= requiredCount ? candidates : facts;
 
   return shuffle(pool).slice(0, requiredCount);
+}
+
+function pickFactsForRound(
+  gameId: RoomRecord["gameId"],
+  language: RoomRecord["settings"]["language"],
+  truthCount: number,
+  imposterCount: number,
+  recentFactIds: Set<string>
+): FactDeck {
+  const facts = getFactsForGame(gameId, language);
+
+  return {
+    realFacts: pickFromPool(facts.realFacts, recentFactIds, truthCount, "real"),
+    fakeFacts: pickFromPool(facts.fakeFacts, recentFactIds, imposterCount, "fake")
+  };
 }
 
 function computeMaxImposters(room: RoomRecord): number {
@@ -123,7 +144,7 @@ function haveAllPlayersVoted(room: RoomRecord): boolean {
 
 function finalizeRound(room: RoomRecord): void {
   if (!room.round) {
-    throw new AppError(409, "Нет активного раунда для показа результатов.");
+    throw new AppError(409, "No active round to reveal.");
   }
 
   const imposters = Object.entries(room.round.assignments)
@@ -155,15 +176,18 @@ function finalizeRound(room: RoomRecord): void {
     }
   }
 
-  const factMap = new Map<string, FactPair>();
+  const realFacts = new Map<string, FactCard>();
+  const fakeFacts = new Map<string, FactCard>();
 
   for (const assignment of Object.values(room.round.assignments)) {
-    if (!factMap.has(assignment.factId)) {
-      factMap.set(assignment.factId, {
+    const targetPool = assignment.factKind === "fake" ? fakeFacts : realFacts;
+
+    if (!targetPool.has(assignment.factId)) {
+      targetPool.set(assignment.factId, {
         id: assignment.factId,
         category: assignment.category,
-        realFact: assignment.realFact,
-        fakeFact: assignment.fakeFact
+        text: assignment.card,
+        kind: assignment.factKind
       });
     }
   }
@@ -176,7 +200,10 @@ function finalizeRound(room: RoomRecord): void {
     cards: Object.fromEntries(
       Object.entries(room.round.assignments).map(([playerId, assignment]) => [playerId, { ...assignment }])
     ),
-    facts: [...factMap.values()]
+    facts: {
+      real: [...realFacts.values()],
+      fake: [...fakeFacts.values()]
+    }
   };
   room.phase = "results";
   markUpdated(room);
@@ -207,7 +234,7 @@ function startRound(room: RoomRecord): void {
   const players = toSortedPlayers(room);
 
   if (players.length < MIN_PLAYERS) {
-    throw new AppError(409, `Для старта нужно минимум ${MIN_PLAYERS} игрока(ов).`);
+    throw new AppError(409, `At least ${MIN_PLAYERS} players are required to start.`);
   }
 
   const impostersToAssign = clampImposters(room, room.settings.imposters);
@@ -215,28 +242,39 @@ function startRound(room: RoomRecord): void {
 
   const playerIds = shuffle(players.map((player) => player.id));
   const recentFactIds = new Set(room.round?.usedFactIds ?? []);
-  const factsForRound = pickFactsForRound(room.gameId, playerIds.length, recentFactIds);
   const imposterIds = new Set(playerIds.slice(0, impostersToAssign));
+  const truthPlayerIds = playerIds.filter((playerId) => !imposterIds.has(playerId));
+  const factsForRound = pickFactsForRound(
+    room.gameId,
+    room.settings.language,
+    truthPlayerIds.length,
+    impostersToAssign,
+    recentFactIds
+  );
+  const realFactQueue = shuffle(factsForRound.realFacts);
+  const fakeFactQueue = shuffle(factsForRound.fakeFacts);
   const assignments: Record<string, AssignmentRecord> = {};
 
-  for (let index = 0; index < playerIds.length; index += 1) {
-    const playerId = playerIds[index];
-    const fact = factsForRound[index];
+  for (const playerId of playerIds) {
     const isImposter = imposterIds.has(playerId);
+    const fact = isImposter ? fakeFactQueue.pop() : realFactQueue.pop();
+
+    if (!fact) {
+      throw new AppError(500, "Fact dealing failed due to insufficient prepared cards.");
+    }
 
     assignments[playerId] = {
       role: isImposter ? "imposter" : "truth",
-      card: isImposter ? fact.fakeFact : fact.realFact,
+      card: fact.text,
       factId: fact.id,
       category: fact.category,
-      realFact: fact.realFact,
-      fakeFact: fact.fakeFact
+      factKind: fact.kind
     };
   }
 
   room.round = {
     roundNumber: (room.round?.roundNumber ?? 0) + 1,
-    usedFactIds: factsForRound.map((fact) => fact.id),
+    usedFactIds: [...factsForRound.realFacts, ...factsForRound.fakeFacts].map((fact) => fact.id),
     assignments,
     discussionEndsAt: Date.now() + room.settings.discussionMinutes * 60_000,
     votes: {},
@@ -249,7 +287,7 @@ function startRound(room: RoomRecord): void {
 
 function endDiscussion(room: RoomRecord): void {
   if (!room.round || room.phase !== "discussion") {
-    throw new AppError(409, "Обсуждение сейчас неактивно.");
+    throw new AppError(409, "Discussion is not active.");
   }
 
   room.phase = "voting";
@@ -258,7 +296,7 @@ function endDiscussion(room: RoomRecord): void {
 
 function extendDiscussion(room: RoomRecord, seconds: number): void {
   if (!room.round || room.phase !== "discussion") {
-    throw new AppError(409, "Обсуждение сейчас неактивно.");
+    throw new AppError(409, "Discussion is not active.");
   }
 
   const safeSeconds = normalizeExtendSeconds(seconds);
@@ -268,7 +306,7 @@ function extendDiscussion(room: RoomRecord, seconds: number): void {
 
 function requireHost(room: RoomRecord, sessionId: string): void {
   if (room.hostId !== sessionId) {
-    throw new AppError(403, "Только хост комнаты может выполнить это действие.");
+    throw new AppError(403, "Only the room host can perform this action.");
   }
 }
 
@@ -276,43 +314,52 @@ function ensurePlayerInRoom(room: RoomRecord, sessionId: string): PlayerRecord {
   const player = room.players[sessionId];
 
   if (!player) {
-    throw new AppError(403, "Вы не состоите в этой комнате.");
+    throw new AppError(403, "You are not in this room.");
   }
 
   return player;
 }
 
-function updateSettings(room: RoomRecord, sessionId: string, discussionMinutes: number, imposters: number): void {
+function updateSettings(
+  room: RoomRecord,
+  sessionId: string,
+  discussionMinutes: number,
+  imposters: number,
+  language: RoomRecord["settings"]["language"]
+): void {
   requireHost(room, sessionId);
 
   if (room.phase !== "lobby") {
-    throw new AppError(409, "Настройки можно менять только в лобби.");
+    throw new AppError(409, "Settings can only be changed in the lobby.");
   }
 
   const nextDiscussionMinutes = clampDiscussionMinutes(discussionMinutes);
   const nextImposters = clampImposters(room, imposters);
+  const nextLanguage = normalizeLanguage(language);
 
   if (
     nextDiscussionMinutes !== room.settings.discussionMinutes ||
-    nextImposters !== room.settings.imposters
+    nextImposters !== room.settings.imposters ||
+    nextLanguage !== room.settings.language
   ) {
     room.settings.discussionMinutes = nextDiscussionMinutes;
     room.settings.imposters = nextImposters;
+    room.settings.language = nextLanguage;
     markUpdated(room);
   }
 }
 
 function castVote(room: RoomRecord, sessionId: string, targetPlayerId: string): void {
   if (!room.round || room.phase !== "voting") {
-    throw new AppError(409, "Голосование сейчас неактивно.");
+    throw new AppError(409, "Voting is not active.");
   }
 
   if (!room.players[targetPlayerId]) {
-    throw new AppError(404, "Игрок для голоса не найден.");
+    throw new AppError(404, "Vote target not found.");
   }
 
   if (targetPlayerId === sessionId) {
-    throw new AppError(409, "Нельзя голосовать за себя.");
+    throw new AppError(409, "You cannot vote for yourself.");
   }
 
   room.round.votes[sessionId] = targetPlayerId;
@@ -363,6 +410,7 @@ function buildClosedRoomView(code: string): RoomView {
     joined: false,
     roomCode: code,
     gameId: "fact-or-fake",
+    language: "en",
     version: 0,
     phase: "lobby",
     settings: { ...DEFAULT_SETTINGS },
@@ -373,7 +421,7 @@ function buildClosedRoomView(code: string): RoomView {
     canStart: false,
     requiresPassword: false,
     round: null,
-    message: "Эта комната уже закрыта."
+    message: "This room has closed."
   };
 }
 
@@ -394,6 +442,7 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
       joined: false,
       roomCode: room.code,
       gameId: room.gameId,
+      language: room.settings.language,
       version: room.version,
       phase: room.phase,
       settings: room.settings,
@@ -406,8 +455,8 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
       round: null,
       message:
         room.phase === "lobby"
-          ? "Введите имя, чтобы присоединиться к комнате."
-          : "Сейчас идет раунд. Вход откроется, когда комната вернется в лобби."
+          ? "Enter your name to join this room."
+          : "A round is in progress. Join when the lobby opens."
     };
   }
 
@@ -434,13 +483,14 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
   const hostControlsStart = room.hostId === sessionId && room.phase === "lobby" && players.length >= MIN_PLAYERS;
   const message =
     room.phase === "lobby" && players.length < MIN_PLAYERS
-      ? `Для старта нужно минимум ${MIN_PLAYERS} игрока(ов).`
+      ? `At least ${MIN_PLAYERS} players are required to start.`
       : null;
 
   return {
     joined: true,
     roomCode: room.code,
     gameId: room.gameId,
+    language: room.settings.language,
     version: room.version,
     phase: room.phase,
     settings: room.settings,
@@ -460,13 +510,13 @@ export async function createRoom(input: CreateRoomInput): Promise<RoomView> {
   const displayName = sanitizeDisplayName(input.displayName);
 
   if (!displayName) {
-    throw new AppError(400, "Имя игрока обязательно.");
+    throw new AppError(400, "Display name is required.");
   }
 
   const game = getGame(input.gameId);
 
   if (!game) {
-    throw new AppError(404, "Игра не найдена.");
+    throw new AppError(404, "Game not found.");
   }
 
   const store = getRoomStore();
@@ -483,7 +533,7 @@ export async function createRoom(input: CreateRoomInput): Promise<RoomView> {
   }
 
   if (!roomCode) {
-    throw new AppError(500, "Не удалось создать код комнаты. Попробуйте еще раз.");
+    throw new AppError(500, "Unable to allocate a room code. Try again.");
   }
 
   const now = Date.now();
@@ -497,7 +547,10 @@ export async function createRoom(input: CreateRoomInput): Promise<RoomView> {
     updatedAt: now,
     version: 1,
     phase: "lobby",
-    settings: { ...DEFAULT_SETTINGS },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      language: normalizeLanguage(input.language)
+    },
     players: {
       [sessionId]: {
         id: sessionId,
@@ -518,26 +571,26 @@ export async function joinRoom(input: JoinRoomInput): Promise<RoomView> {
   const displayName = sanitizeDisplayName(input.displayName);
 
   if (!displayName) {
-    throw new AppError(400, "Имя игрока обязательно.");
+    throw new AppError(400, "Display name is required.");
   }
 
   const roomCode = normalizeRoomCode(input.roomCode);
 
   if (!roomCode) {
-    throw new AppError(400, "Код комнаты обязателен.");
+    throw new AppError(400, "Room code is required.");
   }
 
   const store = getRoomStore();
   const room = await store.getRoom(roomCode);
 
   if (!room) {
-    throw new AppError(404, "Комната не найдена.");
+    throw new AppError(404, "Room not found.");
   }
 
   const password = sanitizePassword(input.password);
 
   if (room.password && room.password !== password) {
-    throw new AppError(403, "Неверный пароль комнаты.");
+    throw new AppError(403, "Incorrect room password.");
   }
 
   const transitionChanged = applyAutomaticTransitions(room);
@@ -559,7 +612,7 @@ export async function joinRoom(input: JoinRoomInput): Promise<RoomView> {
   }
 
   if (room.phase !== "lobby") {
-    throw new AppError(409, "Раунд уже идет. Подключитесь, когда начнется лобби.");
+    throw new AppError(409, "Round already in progress. Join after results.");
   }
 
   room.players[sessionId] = {
@@ -579,14 +632,14 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
   const sessionId = requireSessionId(input.sessionId);
 
   if (!code) {
-    throw new AppError(400, "Код комнаты обязателен.");
+    throw new AppError(400, "Room code is required.");
   }
 
   const store = getRoomStore();
   const room = await store.getRoom(code);
 
   if (!room) {
-    throw new AppError(404, "Комната не найдена.");
+    throw new AppError(404, "Room not found.");
   }
 
   let changed = applyAutomaticTransitions(room);
@@ -598,7 +651,13 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
   switch (input.action.type) {
     case "update_settings": {
       const previousVersion = room.version;
-      updateSettings(room, sessionId, input.action.discussionMinutes, input.action.imposters);
+      updateSettings(
+        room,
+        sessionId,
+        input.action.discussionMinutes,
+        input.action.imposters,
+        input.action.language
+      );
       changed = changed || room.version !== previousVersion;
       break;
     }
@@ -606,7 +665,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       requireHost(room, sessionId);
 
       if (room.phase !== "lobby") {
-        throw new AppError(409, "Игру можно запустить только из лобби.");
+        throw new AppError(409, "You can only start from the lobby.");
       }
 
       startRound(room);
@@ -624,7 +683,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       requireHost(room, sessionId);
 
       if (room.phase !== "voting") {
-        throw new AppError(409, "Результаты можно открыть только во время голосования.");
+        throw new AppError(409, "Results can only be revealed during voting.");
       }
 
       finalizeRound(room);
@@ -647,7 +706,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       requireHost(room, sessionId);
 
       if (room.phase !== "results" && room.phase !== "lobby") {
-        throw new AppError(409, "Сначала завершите текущий раунд.");
+        throw new AppError(409, "Finish the current round first.");
       }
 
       startRound(room);
@@ -658,7 +717,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       requireHost(room, sessionId);
 
       if (room.phase !== "results") {
-        throw new AppError(409, "Вернуться в лобби можно только после результатов.");
+        throw new AppError(409, "You can only return to lobby after results.");
       }
 
       room.phase = "lobby";
@@ -679,7 +738,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       break;
     }
     default:
-      throw new AppError(400, "Неподдерживаемое действие.");
+      throw new AppError(400, "Unsupported action.");
   }
 
   const transitionedAfterAction = applyAutomaticTransitions(room);
@@ -697,7 +756,7 @@ export async function syncRoomView(roomCode: string, sessionId: string, sinceVer
   const memberSessionId = requireSessionId(sessionId);
 
   if (!code) {
-    throw new AppError(400, "Код комнаты обязателен.");
+    throw new AppError(400, "Room code is required.");
   }
 
   const store = getRoomStore();
@@ -707,7 +766,7 @@ export async function syncRoomView(roomCode: string, sessionId: string, sinceVer
     const room = await store.getRoom(code);
 
     if (!room) {
-      throw new AppError(404, "Комната не найдена.");
+      throw new AppError(404, "Room not found.");
     }
 
     const transitioned = applyAutomaticTransitions(room);
@@ -728,7 +787,7 @@ export async function syncRoomView(roomCode: string, sessionId: string, sinceVer
   const room = await store.getRoom(code);
 
   if (!room) {
-    throw new AppError(404, "Комната не найдена.");
+    throw new AppError(404, "Room not found.");
   }
 
   return buildRoomView(room, memberSessionId);

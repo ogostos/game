@@ -18,7 +18,7 @@ export async function GET(request: Request, context: ParamsContext) {
     const since = Number(searchParams.get("since") ?? "0");
 
     if (!Number.isFinite(since)) {
-      throw new AppError(400, "Некорректная версия состояния.");
+      throw new AppError(400, "Invalid state version.");
     }
 
     const state = await syncRoomView(code, sessionId, Math.max(0, Math.floor(since)));
