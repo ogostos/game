@@ -4,10 +4,11 @@ import type { GameId, GameSummary } from "@/lib/shared/types";
 const GAMES: GameSummary[] = [
   {
     id: "fact-or-fake",
-    title: "Fact or Fake",
-    description: "Spot the player holding the fake fact before the votes lock in.",
+    title: "Правда или Фейк",
+    description: "Найдите игрока с поддельным фактом до завершения голосования.",
     minPlayers: 3,
-    maxImposters: 3
+    maxImposters: 3,
+    factCount: FACT_OR_FAKE_FACTS.length
   }
 ];
 

@@ -10,7 +10,7 @@ export async function postJson<TResponse>(url: string, payload: unknown): Promis
   const data = (await response.json()) as { error?: string } & TResponse;
 
   if (!response.ok) {
-    throw new Error(data.error ?? "Request failed.");
+    throw new Error(data.error ?? "Ошибка запроса.");
   }
 
   return data;

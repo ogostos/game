@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { postJson } from "@/lib/client/http";
 import { getOrCreateSessionId } from "@/lib/client/session";
-import type { RoomAction, RoomView } from "@/lib/shared/types";
+import type { RoomAction, RoomPhase, RoomView } from "@/lib/shared/types";
 
 interface RoomClientProps {
   roomCode: string;
@@ -29,6 +29,29 @@ function formatCountdown(totalSeconds: number): string {
     .padStart(2, "0");
 
   return `${minutes}:${seconds}`;
+}
+
+function phaseLabel(phase: RoomPhase): string {
+  switch (phase) {
+    case "lobby":
+      return "Лобби";
+    case "discussion":
+      return "Обсуждение";
+    case "voting":
+      return "Голосование";
+    case "results":
+      return "Результаты";
+    default:
+      return phase;
+  }
+}
+
+function roleLabel(role: "truth" | "imposter" | null | undefined): string {
+  if (role === "imposter") {
+    return "Импостер";
+  }
+
+  return "Правда";
 }
 
 export function RoomClient({ roomCode }: RoomClientProps) {
@@ -89,7 +112,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
           const payload = (await response.json()) as { error?: string; state?: RoomView };
 
           if (!response.ok || !payload.state) {
-            throw new Error(payload.error ?? "Unable to sync room state.");
+            throw new Error(payload.error ?? "Не удалось синхронизировать состояние комнаты.");
           }
 
           if (cancelled) {
@@ -106,7 +129,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
           }
 
           setLoading(false);
-          setError(pollError instanceof Error ? pollError.message : "Connection lost.");
+          setError(pollError instanceof Error ? pollError.message : "Потеряно соединение.");
           await delay(POLL_ERROR_RETRY_MS);
         }
       }
@@ -140,7 +163,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
         router.push("/");
       }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : "Action failed.");
+      setError(actionError instanceof Error ? actionError.message : "Не удалось выполнить действие.");
     } finally {
       setWorkingAction(null);
     }
@@ -154,7 +177,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
     }
 
     if (!joinName.trim()) {
-      setError("Display name is required.");
+      setError("Введите имя игрока.");
       return;
     }
 
@@ -172,7 +195,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       versionRef.current = response.state.version;
       setState(response.state);
     } catch (joinError) {
-      setError(joinError instanceof Error ? joinError.message : "Could not join room.");
+      setError(joinError instanceof Error ? joinError.message : "Не удалось войти в комнату.");
     } finally {
       setWorkingAction(null);
     }
@@ -185,7 +208,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError("Could not copy room link.");
+      setError("Не удалось скопировать ссылку.");
     }
   }
 
@@ -208,8 +231,8 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   if (!sessionId || (loading && !state)) {
     return (
       <div className="panel stack-md">
-        <p className="eyebrow">Connecting</p>
-        <h1 className="title-lg">Loading room...</h1>
+        <p className="eyebrow">Подключение</p>
+        <h1 className="title-lg">Загрузка комнаты...</h1>
       </div>
     );
   }
@@ -217,10 +240,10 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   if (!state) {
     return (
       <div className="panel stack-md">
-        <h1 className="title-lg">Room unavailable</h1>
-        <p className="error-text">{error ?? "Could not load this room."}</p>
+        <h1 className="title-lg">Комната недоступна</h1>
+        <p className="error-text">{error ?? "Не удалось загрузить комнату."}</p>
         <Link href="/" className="text-link">
-          Back to home
+          На главную
         </Link>
       </div>
     );
@@ -230,55 +253,55 @@ export function RoomClient({ roomCode }: RoomClientProps) {
     return (
       <div className="panel stack-lg fade-up">
         <div className="stack-sm">
-          <p className="eyebrow">Room {state.roomCode}</p>
-          <h1 className="title-lg">Join lobby</h1>
+          <p className="eyebrow">Комната {state.roomCode}</p>
+          <h1 className="title-lg">Вход в лобби</h1>
           <p className="muted">{state.message}</p>
         </div>
 
         <div className="pill-row">
-          <span className="pill">Players: {state.players.length}</span>
-          <span className="pill">Phase: {state.phase}</span>
+          <span className="pill">Игроков: {state.players.length}</span>
+          <span className="pill">Фаза: {phaseLabel(state.phase)}</span>
         </div>
 
         {state.phase === "lobby" ? (
           <form className="stack-md" onSubmit={handleJoinRoom}>
             <label className="input-label" htmlFor="join-display-name">
-              Display name
+              Имя игрока
             </label>
             <input
               id="join-display-name"
               className="text-input"
               value={joinName}
               onChange={(event) => setJoinName(event.target.value)}
-              placeholder="Your name"
+              placeholder="Ваше имя"
               maxLength={24}
               autoComplete="nickname"
             />
 
             <label className="input-label" htmlFor="join-room-password">
-              Password (if required)
+              Пароль (если есть)
             </label>
             <input
               id="join-room-password"
               className="text-input"
               value={joinPassword}
               onChange={(event) => setJoinPassword(event.target.value)}
-              placeholder="Room password"
+              placeholder="Пароль комнаты"
               autoComplete="off"
             />
 
             <button className="button-primary" type="submit" disabled={workingAction === "join_room"}>
-              {workingAction === "join_room" ? "Joining..." : "Join Room"}
+              {workingAction === "join_room" ? "Вход..." : "Войти"}
             </button>
           </form>
         ) : (
-          <p className="muted">A round is running right now. The join form will unlock when the lobby reopens.</p>
+          <p className="muted">Сейчас идет раунд. Форма входа откроется, когда начнется лобби.</p>
         )}
 
         {error ? <p className="error-text">{error}</p> : null}
 
         <Link href="/" className="text-link">
-          Back to home
+          На главную
         </Link>
       </div>
     );
@@ -289,16 +312,16 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       <section className="panel stack-md">
         <div className="row-wrap space-between">
           <div className="stack-xs">
-            <p className="eyebrow">Room {state.roomCode}</p>
-            <h1 className="title-lg">Fact or Fake</h1>
+            <p className="eyebrow">Комната {state.roomCode}</p>
+            <h1 className="title-lg">Правда или Фейк</h1>
           </div>
           <div className="pill-row">
-            <span className="pill">Phase: {phase}</span>
+            <span className="pill">Фаза: {phase ? phaseLabel(phase) : "—"}</span>
             <button className="button-ghost" type="button" onClick={copyRoomLink}>
-              {copied ? "Link copied" : "Copy link"}
+              {copied ? "Ссылка скопирована" : "Копировать ссылку"}
             </button>
             <button className="button-ghost" type="button" onClick={() => sendAction({ type: "leave_room" })}>
-              Leave
+              Выйти
             </button>
           </div>
         </div>
@@ -309,20 +332,20 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
       <section className="panel stack-md">
         <div className="row-wrap space-between">
-          <h2 className="title-sm">Players</h2>
-          <span className="muted">{state.players.length} in room</span>
+          <h2 className="title-sm">Игроки</h2>
+          <span className="muted">{state.players.length} в комнате</span>
         </div>
         <div className="player-grid">
           {state.players.map((player) => (
             <article key={player.id} className="player-card">
               <div className="row-wrap space-between">
                 <p>{player.displayName}</p>
-                <span className="muted">{player.score} pts</span>
+                <span className="muted">{player.score} очк.</span>
               </div>
               <div className="pill-row">
-                {player.isHost ? <span className="pill">Host</span> : null}
-                {player.hasVoted ? <span className="pill">Voted</span> : null}
-                {player.id === state.meId ? <span className="pill">You</span> : null}
+                {player.isHost ? <span className="pill">Хост</span> : null}
+                {player.hasVoted ? <span className="pill">Проголосовал</span> : null}
+                {player.id === state.meId ? <span className="pill">Вы</span> : null}
               </div>
             </article>
           ))}
@@ -331,13 +354,13 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
       {phase === "lobby" ? (
         <section className="panel stack-md slide-up">
-          <h2 className="title-sm">Lobby</h2>
+          <h2 className="title-sm">Лобби</h2>
 
           {isHost ? (
             <>
               <div className="stack-sm">
                 <label className="input-label" htmlFor="discussion-minutes">
-                  Discussion timer: {settingsDiscussionMinutes} min
+                  Таймер обсуждения: {settingsDiscussionMinutes} мин
                 </label>
                 <input
                   id="discussion-minutes"
@@ -351,7 +374,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
               <div className="stack-sm">
                 <label className="input-label" htmlFor="imposter-count">
-                  Number of imposters
+                  Количество импостеров
                 </label>
                 <select
                   id="imposter-count"
@@ -380,7 +403,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                   }
                   disabled={workingAction === "update_settings"}
                 >
-                  {workingAction === "update_settings" ? "Saving..." : "Save settings"}
+                  {workingAction === "update_settings" ? "Сохранение..." : "Сохранить настройки"}
                 </button>
 
                 <button
@@ -389,12 +412,12 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                   onClick={() => sendAction({ type: "start_round" })}
                   disabled={!state.canStart || workingAction === "start_round"}
                 >
-                  {workingAction === "start_round" ? "Starting..." : "Start Game"}
+                  {workingAction === "start_round" ? "Запуск..." : "Начать игру"}
                 </button>
               </div>
             </>
           ) : (
-            <p className="muted">Waiting for host to adjust settings and start the round.</p>
+            <p className="muted">Ожидайте, пока хост настроит параметры и запустит раунд.</p>
           )}
         </section>
       ) : null}
@@ -402,32 +425,59 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       {phase === "discussion" ? (
         <section className="panel stack-md slide-up">
           <div className="row-wrap space-between">
-            <h2 className="title-sm">Discussion</h2>
+            <h2 className="title-sm">Обсуждение</h2>
             <p className="timer">{formatCountdown(discussionSecondsLeft)}</p>
           </div>
 
           <article className="card-panel">
-            <p className="eyebrow">Your Card</p>
+            <p className="eyebrow">Ваша карточка</p>
             <h3 className={state.round?.myRole === "imposter" ? "role-badge imposter" : "role-badge truth"}>
-              {state.round?.myRole === "imposter" ? "Imposter" : "Truth"}
+              {roleLabel(state.round?.myRole)}
             </h3>
             <p>{state.round?.myCard}</p>
           </article>
 
-          <p className="muted">
-            Discuss with the group. When the timer hits zero, voting starts automatically.
-          </p>
+          {isHost ? (
+            <div className="button-row">
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => sendAction({ type: "extend_discussion", seconds: 30 })}
+                disabled={workingAction === "extend_discussion"}
+              >
+                {workingAction === "extend_discussion" ? "Продление..." : "+30 сек"}
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => sendAction({ type: "extend_discussion", seconds: 60 })}
+                disabled={workingAction === "extend_discussion"}
+              >
+                {workingAction === "extend_discussion" ? "Продление..." : "+1 мин"}
+              </button>
+              <button
+                className="button-primary"
+                type="button"
+                onClick={() => sendAction({ type: "end_discussion" })}
+                disabled={workingAction === "end_discussion"}
+              >
+                {workingAction === "end_discussion" ? "Завершение..." : "Завершить обсуждение"}
+              </button>
+            </div>
+          ) : (
+            <p className="muted">Обсудите факты в группе. После таймера начнется голосование.</p>
+          )}
         </section>
       ) : null}
 
       {phase === "voting" ? (
         <section className="panel stack-md slide-up">
-          <h2 className="title-sm">Vote: Who has the fake fact?</h2>
+          <h2 className="title-sm">Голосование: кто получил фейковый факт?</h2>
 
           <article className="card-panel">
-            <p className="eyebrow">Your Card</p>
+            <p className="eyebrow">Ваша карточка</p>
             <h3 className={state.round?.myRole === "imposter" ? "role-badge imposter" : "role-badge truth"}>
-              {state.round?.myRole === "imposter" ? "Imposter" : "Truth"}
+              {roleLabel(state.round?.myRole)}
             </h3>
             <p>{state.round?.myCard}</p>
           </article>
@@ -449,7 +499,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
           </div>
 
           <div className="row-wrap space-between">
-            {state.round?.myVote ? <p className="muted">You voted for {playersById[state.round.myVote]}.</p> : <p />}
+            {state.round?.myVote ? <p className="muted">Ваш голос: {playersById[state.round.myVote]}.</p> : <p />}
 
             {isHost ? (
               <button
@@ -458,7 +508,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 onClick={() => sendAction({ type: "reveal_results" })}
                 disabled={workingAction === "reveal_results"}
               >
-                {workingAction === "reveal_results" ? "Revealing..." : "Reveal early"}
+                {workingAction === "reveal_results" ? "Открытие..." : "Открыть результаты"}
               </button>
             ) : null}
           </div>
@@ -467,55 +517,59 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
       {phase === "results" ? (
         <section className="panel stack-md slide-up">
-          <h2 className="title-sm">Results</h2>
-
-          <div className="result-grid">
-            <article className="card-panel">
-              <p className="eyebrow">Real Fact</p>
-              <p>{state.round?.realFact}</p>
-            </article>
-            <article className="card-panel">
-              <p className="eyebrow">Fake Fact</p>
-              <p>{state.round?.fakeFact}</p>
-            </article>
-          </div>
+          <h2 className="title-sm">Результаты</h2>
 
           <article className="card-panel">
-            <p className="eyebrow">Imposters</p>
+            <p className="eyebrow">Импостеры</p>
             <p>
               {(state.round?.imposters ?? [])
-                .map((playerId) => playersById[playerId] ?? "Unknown")
-                .join(", ") || "None"}
+                .map((playerId) => playersById[playerId] ?? "Неизвестно")
+                .join(", ") || "Нет"}
             </p>
           </article>
 
           <div className="stack-sm">
-            <h3 className="title-xs">Votes</h3>
-            {(state.round?.votes && Object.keys(state.round.votes).length > 0) ? (
+            <h3 className="title-xs">Голоса</h3>
+            {state.round?.votes && Object.keys(state.round.votes).length > 0 ? (
               <div className="stack-xs">
                 {Object.entries(state.round.votes).map(([voterId, targetId]) => (
                   <p key={voterId} className="muted">
-                    {playersById[voterId] ?? "Unknown"} voted for {playersById[targetId] ?? "Unknown"}
+                    {playersById[voterId] ?? "Неизвестно"} голосует за {playersById[targetId] ?? "Неизвестно"}
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="muted">No votes recorded.</p>
+              <p className="muted">Голоса отсутствуют.</p>
             )}
           </div>
 
           <div className="stack-sm">
-            <h3 className="title-xs">Assigned Cards</h3>
+            <h3 className="title-xs">Выданные карточки</h3>
             {state.round?.cards ? (
               <div className="stack-xs">
                 {Object.entries(state.round.cards).map(([playerId, cardInfo]) => (
                   <p key={playerId} className="muted">
-                    <strong>{playersById[playerId] ?? "Unknown"}:</strong> {cardInfo.card} ({cardInfo.role})
+                    <strong>{playersById[playerId] ?? "Неизвестно"}:</strong> {cardInfo.card} ({roleLabel(cardInfo.role)})
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="muted">Cards unavailable.</p>
+              <p className="muted">Карточки недоступны.</p>
+            )}
+          </div>
+
+          <div className="stack-sm">
+            <h3 className="title-xs">Факты раунда ({state.round?.facts?.length ?? 0})</h3>
+            {state.round?.facts?.length ? (
+              <div className="stack-xs">
+                {state.round.facts.map((fact) => (
+                  <p key={fact.id} className="muted">
+                    <strong>{fact.category}:</strong> Правда — {fact.realFact} | Фейк — {fact.fakeFact}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Список фактов недоступен.</p>
             )}
           </div>
 
@@ -527,7 +581,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 onClick={() => sendAction({ type: "play_again" })}
                 disabled={workingAction === "play_again"}
               >
-                {workingAction === "play_again" ? "Starting..." : "Play again"}
+                {workingAction === "play_again" ? "Запуск..." : "Следующий раунд"}
               </button>
 
               <button
@@ -536,11 +590,11 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 onClick={() => sendAction({ type: "back_to_lobby" })}
                 disabled={workingAction === "back_to_lobby"}
               >
-                {workingAction === "back_to_lobby" ? "Returning..." : "Back to lobby"}
+                {workingAction === "back_to_lobby" ? "Возврат..." : "Вернуться в лобби"}
               </button>
             </div>
           ) : (
-            <p className="muted">Waiting for host to start the next round or return to lobby.</p>
+            <p className="muted">Ожидайте решения хоста: новый раунд или возврат в лобби.</p>
           )}
         </section>
       ) : null}

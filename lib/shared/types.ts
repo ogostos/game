@@ -15,6 +15,7 @@ export interface GameSummary {
   description: string;
   minPlayers: number;
   maxImposters: number;
+  factCount: number;
 }
 
 export interface FactPair {
@@ -34,6 +35,10 @@ export interface PlayerRecord {
 export interface AssignmentRecord {
   role: PlayerRole;
   card: string;
+  factId: string;
+  category: string;
+  realFact: string;
+  fakeFact: string;
 }
 
 export interface RoundResult {
@@ -41,15 +46,12 @@ export interface RoundResult {
   voteCounts: Record<string, number>;
   imposters: string[];
   cards: Record<string, AssignmentRecord>;
-  realFact: string;
-  fakeFact: string;
+  facts: FactPair[];
 }
 
 export interface RoundRecord {
   roundNumber: number;
-  factId: string;
-  realFact: string;
-  fakeFact: string;
+  usedFactIds: string[];
   assignments: Record<string, AssignmentRecord>;
   discussionEndsAt: number;
   votes: Record<string, string>;
@@ -89,8 +91,7 @@ export interface PublicRound {
   votes: Record<string, string> | null;
   voteCounts: Record<string, number> | null;
   cards: Record<string, AssignmentRecord> | null;
-  realFact: string | null;
-  fakeFact: string | null;
+  facts: FactPair[] | null;
 }
 
 export interface RoomView {
@@ -125,6 +126,13 @@ export type RoomAction =
     }
   | {
       type: "reveal_results";
+    }
+  | {
+      type: "end_discussion";
+    }
+  | {
+      type: "extend_discussion";
+      seconds: number;
     }
   | {
       type: "play_again";

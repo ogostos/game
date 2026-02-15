@@ -5,10 +5,10 @@ export default function NotFoundPage() {
     <main className="shell stack-xl">
       <section className="panel stack-md">
         <p className="eyebrow">404</p>
-        <h1 className="title-lg">Page not found</h1>
-        <p className="muted">The page you opened does not exist in this game box.</p>
+        <h1 className="title-lg">Страница не найдена</h1>
+        <p className="muted">Такой страницы нет в этой игровой коробке.</p>
         <Link href="/" className="text-link">
-          Back to home
+          На главную
         </Link>
       </section>
     </main>

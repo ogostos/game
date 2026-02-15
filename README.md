@@ -1,72 +1,63 @@
 # Imposter Game Box
 
-Browser-based social party game built with Next.js and ready for Vercel deployment.
+Веб-игра для компании на Next.js, готовая к деплою на Vercel.
 
-## Implemented MVP
+## Что реализовано
 
-- Game box home page (future-proof for multiple game modes)
-- Game mode #1: `Fact or Fake`
-- No-auth room flow with display names
-- Room create/join via code + optional password
-- Host controls:
-  - Discussion timer (1-5 minutes)
-  - Number of imposters
-  - Start game / next round / back to lobby
-- Round lifecycle:
-  - Lobby
-  - Discussion (private cards)
-  - Voting
-  - Results reveal (imposters, votes, cards)
-- Live room sync via long polling (`/sync`) compatible with serverless environments
-- Optional Redis-backed room persistence (Upstash) for multi-instance deployments
+- Главная страница с архитектурой под несколько игровых режимов
+- Режим #1: `Правда или Фейк`
+- Вход без авторизации (имя + код комнаты + опциональный пароль)
+- Лобби и контроль хоста:
+  - Таймер обсуждения (1-5 минут)
+  - Количество импостеров
+  - Старт раунда
+- Управление обсуждением во время игры:
+  - Досрочно завершить обсуждение
+  - Продлить обсуждение (+30 сек / +1 мин)
+- Полный цикл раунда:
+  - Лобби -> Обсуждение -> Голосование -> Результаты
+- Уникальная раздача фактов:
+  - В каждом раунде каждый игрок получает свой уникальный факт
+- Синхронизация комнаты в реальном времени через long polling
+- Хранилище комнат:
+  - In-memory (локально)
+  - Upstash Redis (рекомендуется для продакшена)
 
-## Tech Stack
+## Где хранится база фактов
 
-- Next.js (App Router, TypeScript)
-- React
-- Serverless API routes
-- Store abstraction:
-  - In-memory store (default for local dev)
-  - Upstash Redis store (enabled via env vars)
+- Файл: `lib/games/fact-or-fake/facts.ts`
+- Тип хранения: пока хардкод в репозитории (без внешней БД)
+- Количество фактов: `25`
 
-## Local Development
+## Локальный запуск
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Откройте [http://localhost:3000](http://localhost:3000).
 
-## Deploying to Vercel
+## Деплой на Vercel
 
-This app works without a database (in-memory) for quick tests, but production should use Redis storage.
+Для продакшена рекомендуется Redis, иначе состояние комнат будет нестабильным на нескольких инстансах.
 
-### Recommended env vars
+Переменные окружения:
 
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-When both are present, the app switches from in-memory room storage to Redis storage.
-
-## Room API Surface
+## API комнаты
 
 - `POST /api/rooms/create`
 - `POST /api/rooms/join`
 - `POST /api/rooms/[code]/action`
 - `GET /api/rooms/[code]/sync?sessionId=...&since=...`
 
-## Project Structure
+## Структура проекта
 
-- `app/` - pages, layouts, API handlers
-- `components/` - client UI (game entry + room experience)
-- `lib/shared/` - shared game/room types
-- `lib/games/` - game registry + fact dataset
-- `lib/server/` - game engine, store, helpers, error handling
-
-## Notes
-
-- Minimum player count is 3.
-- Scores are tracked per room session.
-- Joining is limited to lobby phase for fairness.
-- Long polling provides near real-time updates and avoids websocket-only hosting constraints.
+- `app/` - страницы, layout и API роуты
+- `components/` - клиентские UI-компоненты
+- `lib/shared/` - общие типы
+- `lib/games/` - реестр игр и база фактов
+- `lib/server/` - игровая логика и хранилище

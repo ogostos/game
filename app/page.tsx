@@ -8,36 +8,37 @@ export default function HomePage() {
   return (
     <main className="shell stack-xl">
       <section className="hero-panel fade-up">
-        <p className="eyebrow">Party Game Box</p>
-        <h1 className="title-xl">Play quick social games in your browser.</h1>
+        <p className="eyebrow">Игровая коробка</p>
+        <h1 className="title-xl">Быстрые социальные игры прямо в браузере.</h1>
         <p className="hero-copy">
-          Start a room, share a code, and jump straight into live rounds. Mobile-first and built for fast group play.
+          Создайте комнату, поделитесь ссылкой и сразу начинайте раунд. Интерфейс оптимизирован под мобильные устройства.
         </p>
       </section>
 
       <section className="stack-md">
         <div className="row-wrap space-between">
-          <h2 className="title-md">Available Games</h2>
-          <p className="muted">More modes coming soon</p>
+          <h2 className="title-md">Доступные игры</h2>
+          <p className="muted">Скоро появятся новые режимы</p>
         </div>
 
         <div className="game-grid">
           {games.map((game) => (
             <Link key={game.id} href={`/games/${game.id}`} className="game-card">
-              <p className="eyebrow">Live</p>
+              <p className="eyebrow">Онлайн</p>
               <h3 className="title-sm">{game.title}</h3>
               <p className="muted">{game.description}</p>
               <div className="pill-row">
-                <span className="pill">Min {game.minPlayers} players</span>
-                <span className="pill">Up to {game.maxImposters} imposters</span>
+                <span className="pill">От {game.minPlayers} игроков</span>
+                <span className="pill">До {game.maxImposters} импостеров</span>
+                <span className="pill">Фактов: {game.factCount}</span>
               </div>
             </Link>
           ))}
 
           <article className="game-card pending">
-            <p className="eyebrow">Soon</p>
-            <h3 className="title-sm">New Game Slot</h3>
-            <p className="muted">This slot is intentionally reserved for future game modes.</p>
+            <p className="eyebrow">Скоро</p>
+            <h3 className="title-sm">Слот для новой игры</h3>
+            <p className="muted">Этот блок зарезервирован под следующие игровые режимы.</p>
           </article>
         </div>
       </section>
