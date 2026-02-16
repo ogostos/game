@@ -540,6 +540,29 @@ const AWKWARD_PUNCTUATION_PATTERN = /(,\.)|(\.{2,})|(\s{2,})|(\(\s*\))/;
 const LOW_SIGNAL_PATTERN = /\b(is in|is located in|is the capital of|the currency of)\b/i;
 const LOW_SIGNAL_PATTERN_RU =
   /(находится\sв|является\sстолиц[аы]|является\sгородом\sв|валют[аы]\sстраны|официальн(ый|ого)\sязык)/i;
+const UNWANTED_IMPORT_PREFIX_PATTERN =
+  /^(A verified fact states that|Historical sources report that|Reliable references show that)\b/i;
+const TRAILING_PUNCTUATION_PATTERN = /[,;:]\.?$/;
+const EXTRACTION_ARTIFACT_PATTERN =
+  /(^\W*so we are told\b)|(\b[a-d]\s*\))|(\b[a-d]\)\b)|(\bno eyes\b)|(\bq\s*[:\-])/i;
+const BORING_EDITORIAL_PATTERN =
+  /\b(was published in|published under|was first officially used|was devised in|according to|historian|biography|journal|court entertainment|international meteorological conference|latin vulgate)\b/i;
+const INTERESTING_TOPIC_PATTERN =
+  /\b(geography|climate|weather|temperature|storm|ocean|sea|river|mountain|island|world|global|planet|earth|culture|food|music|art|science|technology|internet|digital|president|prime minister|election|city|country|population|record|space|animal)\b|\d/i;
+const OLD_YEAR_PATTERN = /\b(1[0-8][0-9]{2}|19[0-4][0-9])\b/i;
+
+function normalizeFactText(text: string): string {
+  return text
+    .replace(UNWANTED_IMPORT_PREFIX_PATTERN, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:!?])\1+/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function hasCyrillic(text: string): boolean {
+  return /[А-Яа-яЁё]/.test(text);
+}
 
 function normalizeTag(tag: string): string {
   return tag
@@ -564,13 +587,18 @@ function hasNonEmptyBilingual(value: BilingualText): boolean {
 }
 
 function isInterestingStatement(text: string, language: Language): boolean {
-  const words = textWordCount(text);
+  const normalized = normalizeFactText(text);
+  const words = textWordCount(normalized);
 
   if (words < 4 || words > 34) {
     return false;
   }
 
-  if (language === "ru" ? LOW_SIGNAL_PATTERN_RU.test(text) : LOW_SIGNAL_PATTERN.test(text)) {
+  if (language === "ru" ? LOW_SIGNAL_PATTERN_RU.test(normalized) : LOW_SIGNAL_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  if (language === "en" && !INTERESTING_TOPIC_PATTERN.test(normalized)) {
     return false;
   }
 
@@ -578,7 +606,7 @@ function isInterestingStatement(text: string, language: Language): boolean {
 }
 
 function passesEditorialTextFilter(text: string, language: Language): boolean {
-  const trimmed = text.trim();
+  const trimmed = normalizeFactText(text);
 
   if (trimmed.length < 12 || trimmed.length > 220) {
     return false;
@@ -589,6 +617,18 @@ function passesEditorialTextFilter(text: string, language: Language): boolean {
   }
 
   if (AWKWARD_PUNCTUATION_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (TRAILING_PUNCTUATION_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (EXTRACTION_ARTIFACT_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (BORING_EDITORIAL_PATTERN.test(trimmed)) {
     return false;
   }
 
@@ -729,7 +769,25 @@ function isPublishableFactSource(fact: FactSource): boolean {
     return false;
   }
 
+  if (!hasCyrillic(fact.category.ru) || !hasCyrillic(fact.text.ru)) {
+    return false;
+  }
+
+  if (normalizeFactText(fact.text.en).toLowerCase() === normalizeFactText(fact.text.ru).toLowerCase()) {
+    return false;
+  }
+
   if (!fact.metadata.familyFriendly || fact.metadata.verificationStatus !== "verified") {
+    return false;
+  }
+
+  const lowerCategory = fact.category.en.toLowerCase();
+
+  if (lowerCategory.includes("history") || lowerCategory.includes("cinema") || lowerCategory.includes("language")) {
+    return false;
+  }
+
+  if (OLD_YEAR_PATTERN.test(normalizeFactText(fact.text.en))) {
     return false;
   }
 
