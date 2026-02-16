@@ -53,6 +53,7 @@ Optional environment variables:
 Runtime gameplay uses curated cards from:
 
 - `lib/games/fact-or-fake/facts.ts`
+- `data/facts/fact-or-fake.curated.json` (imported curated pool)
 
 Runtime publish gate requires:
 
@@ -63,7 +64,24 @@ Runtime publish gate requires:
 
 Generated JSON (`data/facts/fact-or-fake.generated.json`) is considered staging input for future curation, not direct runtime content.
 
-## 5) Curation workflow tracker
+## 5) Build family-friendly curated runtime dataset
+
+```bash
+npm run facts:build:curated -- data/facts/fact-or-fake.generated.json data/facts/fact-or-fake.curated.json
+```
+
+Default targets:
+
+- `CURATED_REAL_TARGET=5000`
+- `CURATED_FAKE_TARGET=1000`
+
+You can override:
+
+```bash
+CURATED_REAL_TARGET=6000 CURATED_FAKE_TARGET=1200 npm run facts:build:curated -- data/facts/fact-or-fake.generated.json data/facts/fact-or-fake.curated.json
+```
+
+## 6) Curation workflow tracker
 
 - `data/facts/curation/curation-worklist.json`
 - Track trusted sources, pending topics, and required metadata there.

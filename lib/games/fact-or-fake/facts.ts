@@ -1,3 +1,4 @@
+import curatedFactsSource from "@/data/facts/fact-or-fake.curated.json";
 import type {
   FactCard,
   FactCardMetadata,
@@ -23,6 +24,17 @@ interface PairMetadata {
   source: FactSourceReference;
   tags: string[];
   notes?: string;
+}
+
+interface CuratedFactSource {
+  id: string;
+  category: BilingualText;
+  text: BilingualText;
+}
+
+interface CuratedFactsPayload {
+  realFacts?: CuratedFactSource[];
+  fakeFacts?: CuratedFactSource[];
 }
 
 interface FactSource {
@@ -517,11 +529,17 @@ const CURATED_PAIR_METADATA: Record<string, PairMetadata> = {
 };
 
 const SAFE_BORING_PATTERN =
-  /\b(capital of|currency of|flows into|is in\b|is located in|located in the country|official language of)\b/i;
+  /\b(capital of|currency of|flows into|is in\b|is located in|located in the country|official language of|is a city in|is a country in)\b/i;
+const SAFE_BORING_PATTERN_RU =
+  /(столиц[аы]\s|валют[аы]\s|впадает\sв|находится\sв|официальн(ый|ого)\sязык|является\sгородом\sв|является\sстраной\sв)/i;
 const UNSAFE_CONTENT_PATTERN =
-  /\b(sex|sexual|penis|vagina|orgasm|porn|nude|naked|genitals|fetish|explicit|orgy|rape|suicide|self-harm|gore|kill yourself)\b/i;
+  /\b(sex|sexual|penis|vagina|orgasm|porn|genitals|fetish|explicit|orgy|rape|suicide|self-harm|gore|kill yourself|terroris(?:m|t)|nazi|racis(?:m|t)|extremis(?:m|t))\b/i;
+const UNSAFE_CONTENT_PATTERN_RU =
+  /(секс|сексуал|пенис|вагин|оргазм|порно|генитал|фетиш|изнасил|суицид|самоубийств|самоповрежд|террор|наци|расист|экстремист)/i;
 const AWKWARD_PUNCTUATION_PATTERN = /(,\.)|(\.{2,})|(\s{2,})|(\(\s*\))/;
 const LOW_SIGNAL_PATTERN = /\b(is in|is located in|is the capital of|the currency of)\b/i;
+const LOW_SIGNAL_PATTERN_RU =
+  /(находится\sв|является\sстолиц[аы]|является\sгородом\sв|валют[аы]\sстраны|официальн(ый|ого)\sязык)/i;
 
 function normalizeTag(tag: string): string {
   return tag
@@ -545,28 +563,28 @@ function hasNonEmptyBilingual(value: BilingualText): boolean {
   return value.en.trim().length > 0 && value.ru.trim().length > 0;
 }
 
-function isInterestingStatement(text: string): boolean {
+function isInterestingStatement(text: string, language: Language): boolean {
   const words = textWordCount(text);
 
   if (words < 4 || words > 34) {
     return false;
   }
 
-  if (LOW_SIGNAL_PATTERN.test(text)) {
+  if (language === "ru" ? LOW_SIGNAL_PATTERN_RU.test(text) : LOW_SIGNAL_PATTERN.test(text)) {
     return false;
   }
 
   return true;
 }
 
-function passesEditorialTextFilter(text: string): boolean {
+function passesEditorialTextFilter(text: string, language: Language): boolean {
   const trimmed = text.trim();
 
   if (trimmed.length < 12 || trimmed.length > 220) {
     return false;
   }
 
-  if (UNSAFE_CONTENT_PATTERN.test(trimmed)) {
+  if (UNSAFE_CONTENT_PATTERN.test(trimmed) || UNSAFE_CONTENT_PATTERN_RU.test(trimmed)) {
     return false;
   }
 
@@ -574,11 +592,11 @@ function passesEditorialTextFilter(text: string): boolean {
     return false;
   }
 
-  if (SAFE_BORING_PATTERN.test(trimmed)) {
+  if (language === "ru" ? SAFE_BORING_PATTERN_RU.test(trimmed) : SAFE_BORING_PATTERN.test(trimmed)) {
     return false;
   }
 
-  if (!isInterestingStatement(trimmed)) {
+  if (!isInterestingStatement(trimmed, language)) {
     return false;
   }
 
@@ -604,6 +622,104 @@ function metadataForCurated(pairId: string, kind: FactKind, category: BilingualT
   };
 }
 
+function sourceTypeForImported(id: string): FactCardMetadata["sourceType"] {
+  if (id.startsWith("wd-")) {
+    return "wikidata";
+  }
+
+  if (id.startsWith("epub-")) {
+    return "book_extract";
+  }
+
+  return "manual_seed";
+}
+
+function sourceForImported(id: string): FactSourceReference {
+  if (id.startsWith("wd-")) {
+    return {
+      name: "Wikidata",
+      url: "https://www.wikidata.org/"
+    };
+  }
+
+  if (id.startsWith("epub-")) {
+    return {
+      name: "The Book of General Ignorance (EPUB extract)",
+      url: "https://en.wikipedia.org/wiki/The_Book_of_General_Ignorance"
+    };
+  }
+
+  return {
+    name: "Curated Source",
+    url: "https://github.com/ogostos/game"
+  };
+}
+
+function metadataForImported(id: string, kind: FactKind, category: BilingualText): FactCardMetadata {
+  const kindTag = kind === "fake" ? "myth" : "fact";
+  const categoryTag = normalizeTag(category.en);
+  const sourceType = sourceTypeForImported(id);
+
+  return {
+    qualityTier: "curated",
+    sourceType,
+    verificationStatus: "verified",
+    familyFriendly: true,
+    reviewedAt: CURATED_REVIEWED_AT,
+    verifiedAt: CURATED_REVIEWED_AT,
+    source: sourceForImported(id),
+    tags: uniqueTags([categoryTag, kindTag, "family-friendly", sourceType]),
+    notes: "Included from curated family-friendly pipeline."
+  };
+}
+
+function toImportedFacts(value: unknown, kind: FactKind): FactSource[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const output: FactSource[] = [];
+
+  for (const row of value) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+
+    const candidate = row as Partial<CuratedFactSource>;
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+    const category = candidate.category;
+    const text = candidate.text;
+
+    if (
+      !id ||
+      !category ||
+      !text ||
+      typeof category.en !== "string" ||
+      typeof category.ru !== "string" ||
+      typeof text.en !== "string" ||
+      typeof text.ru !== "string"
+    ) {
+      continue;
+    }
+
+    output.push({
+      id,
+      category: {
+        en: category.en,
+        ru: category.ru
+      },
+      text: {
+        en: text.en,
+        ru: text.ru
+      },
+      kind,
+      metadata: metadataForImported(id, kind, category)
+    });
+  }
+
+  return output;
+}
+
 function isPublishableFactSource(fact: FactSource): boolean {
   if (!fact.id.trim()) {
     return false;
@@ -617,7 +733,7 @@ function isPublishableFactSource(fact: FactSource): boolean {
     return false;
   }
 
-  if (!passesEditorialTextFilter(fact.text.en) || !passesEditorialTextFilter(fact.text.ru)) {
+  if (!passesEditorialTextFilter(fact.text.en, "en") || !passesEditorialTextFilter(fact.text.ru, "ru")) {
     return false;
   }
 
@@ -667,8 +783,12 @@ const curatedFakeFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   metadata: metadataForCurated(fact.id, "fake", fact.category)
 })).filter(isPublishableFactSource);
 
-const REAL_FACT_SOURCE = dedupeById(curatedRealFacts);
-const FAKE_FACT_SOURCE = dedupeById(curatedFakeFacts);
+const importedFacts = curatedFactsSource as CuratedFactsPayload;
+const importedRealFacts = toImportedFacts(importedFacts.realFacts, "real").filter(isPublishableFactSource);
+const importedFakeFacts = toImportedFacts(importedFacts.fakeFacts, "fake").filter(isPublishableFactSource);
+
+const REAL_FACT_SOURCE = dedupeById([...curatedRealFacts, ...importedRealFacts]);
+const FAKE_FACT_SOURCE = dedupeById([...curatedFakeFacts, ...importedFakeFacts]);
 
 export const FACT_OR_FAKE_REAL_FACT_COUNT = REAL_FACT_SOURCE.length;
 export const FACT_OR_FAKE_FAKE_FACT_COUNT = FAKE_FACT_SOURCE.length;

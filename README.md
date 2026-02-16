@@ -35,9 +35,15 @@ Facts now use two independent pools:
 Runtime behavior (strict):
 
 - only curated cards are used in gameplay (`lib/games/fact-or-fake/facts.ts`)
+- imported curated pool is loaded from `data/facts/fact-or-fake.curated.json`
 - only `familyFriendly=true` and `verificationStatus=verified` cards are publishable
 - editorial filter removes awkward/low-signal/unsafe text
 - every playable card must have both English and Russian text (no language fallback)
+
+Current playable volume:
+
+- Real facts: `5023`
+- Fake facts: `1025`
 
 ## Curation Workspace
 
@@ -48,6 +54,12 @@ Runtime behavior (strict):
 ## Fact Expansion Workflow
 
 Generated/imported datasets are for sourcing and curation support only. They are not used directly in runtime gameplay.
+
+To build the curated runtime pool:
+
+```bash
+npm run facts:build:curated -- data/facts/fact-or-fake.generated.json data/facts/fact-or-fake.curated.json
+```
 
 1) Extract from EPUB:
 
