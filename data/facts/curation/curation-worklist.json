@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-16",
+  "target": {
+    "realFacts": 1200,
+    "fakeFacts": 1200,
+    "familyFriendlyOnly": true
+  },
+  "metadataSchema": {
+    "required": [
+      "id",
+      "category.en",
+      "category.ru",
+      "real.text.en",
+      "real.text.ru",
+      "fake.text.en",
+      "fake.text.ru",
+      "real.metadata.source.name",
+      "real.metadata.source.url",
+      "real.metadata.verificationStatus",
+      "real.metadata.familyFriendly",
+      "fake.metadata.verificationStatus",
+      "fake.metadata.familyFriendly"
+    ]
+  },
+  "trustedSources": [
+    {
+      "id": "src-wikipedia-misconceptions",
+      "name": "Wikipedia: List of common misconceptions",
+      "url": "https://en.wikipedia.org/wiki/List_of_common_misconceptions",
+      "sourceType": "wikipedia",
+      "status": "active"
+    },
+    {
+      "id": "src-britannica",
+      "name": "Encyclopaedia Britannica",
+      "url": "https://www.britannica.com/",
+      "sourceType": "reference_site",
+      "status": "active"
+    },
+    {
+      "id": "src-noaa-facts",
+      "name": "NOAA Facts",
+      "url": "https://oceanservice.noaa.gov/facts/",
+      "sourceType": "reference_site",
+      "status": "active"
+    },
+    {
+      "id": "src-nasa-facts",
+      "name": "NASA Facts",
+      "url": "https://science.nasa.gov/",
+      "sourceType": "reference_site",
+      "status": "active"
+    },
+    {
+      "id": "src-smithsonian",
+      "name": "Smithsonian Magazine",
+      "url": "https://www.smithsonianmag.com/",
+      "sourceType": "reference_site",
+      "status": "active"
+    },
+    {
+      "id": "src-national-geographic",
+      "name": "National Geographic",
+      "url": "https://www.nationalgeographic.com/",
+      "sourceType": "reference_site",
+      "status": "active"
+    }
+  ],
+  "queue": [
+    {
+      "id": "todo-001",
+      "topic": "Misconception pairs",
+      "sourceId": "src-wikipedia-misconceptions",
+      "status": "pending",
+      "notes": "Collect 100 concise, family-safe misconception claims and verify each with at least one external citation."
+    },
+    {
+      "id": "todo-002",
+      "topic": "Science and space surprises",
+      "sourceId": "src-nasa-facts",
+      "status": "pending",
+      "notes": "Collect 150 fun one-liners that are discussion-friendly and not obvious textbook facts."
+    },
+    {
+      "id": "todo-003",
+      "topic": "Nature and animals",
+      "sourceId": "src-noaa-facts",
+      "status": "pending",
+      "notes": "Collect 150 interesting real facts and craft plausible fake variants manually."
+    },
+    {
+      "id": "todo-004",
+      "topic": "History myths",
+      "sourceId": "src-britannica",
+      "status": "pending",
+      "notes": "Collect 200 high-confidence historical facts and derive matching myths."
+    },
+    {
+      "id": "todo-005",
+      "topic": "Family-safety audit",
+      "sourceId": "src-smithsonian",
+      "status": "pending",
+      "notes": "Define red-flag keyword list and remove cards that are sexual, explicit, hateful, or medical panic-oriented."
+    }
+  ]
+}

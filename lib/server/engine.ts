@@ -187,7 +187,8 @@ function finalizeRound(room: RoomRecord): void {
         id: assignment.factId,
         category: assignment.category,
         text: assignment.card,
-        kind: assignment.factKind
+        kind: assignment.factKind,
+        metadata: assignment.factMetadata
       });
     }
   }
@@ -268,7 +269,8 @@ function startRound(room: RoomRecord): void {
       card: fact.text,
       factId: fact.id,
       category: fact.category,
-      factKind: fact.kind
+      factKind: fact.kind,
+      factMetadata: fact.metadata
     };
   }
 

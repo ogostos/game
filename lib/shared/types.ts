@@ -5,6 +5,26 @@ export type RoomPhase = "lobby" | "discussion" | "voting" | "results";
 
 export type PlayerRole = "truth" | "imposter";
 export type FactKind = "real" | "fake";
+export type FactQualityTier = "curated" | "generated";
+export type FactSourceType = "manual_seed" | "book_extract" | "wikidata" | "wikipedia" | "reference_site";
+export type FactVerificationStatus = "draft" | "verified";
+
+export interface FactSourceReference {
+  name: string;
+  url: string;
+}
+
+export interface FactCardMetadata {
+  qualityTier: FactQualityTier;
+  sourceType: FactSourceType;
+  verificationStatus: FactVerificationStatus;
+  familyFriendly: boolean;
+  reviewedAt: string;
+  verifiedAt?: string;
+  source?: FactSourceReference;
+  tags: string[];
+  notes?: string;
+}
 
 export interface RoomSettings {
   discussionMinutes: number;
@@ -26,6 +46,7 @@ export interface FactCard {
   category: string;
   text: string;
   kind: FactKind;
+  metadata: FactCardMetadata;
 }
 
 export interface FactDeck {
@@ -46,6 +67,7 @@ export interface AssignmentRecord {
   factId: string;
   category: string;
   factKind: FactKind;
+  factMetadata: FactCardMetadata;
 }
 
 export interface RoundFactsSummary {

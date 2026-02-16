@@ -7,7 +7,7 @@ const GAMES: GameSummary[] = [
     description: "Find the player with fake information before votes are locked.",
     minPlayers: 3,
     maxImposters: 3,
-    factCount: 10068
+    factCount: 25
   }
 ];
 

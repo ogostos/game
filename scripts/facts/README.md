@@ -4,6 +4,7 @@ This folder contains scripts to build a large `Fact or Fake` dataset with separa
 
 - `realFacts[]`
 - `fakeFacts[]`
+- metadata per card (`source`, `verificationStatus`, `familyFriendly`, `tags`)
 
 Each fact has this shape:
 
@@ -56,3 +57,14 @@ Generated facts are loaded at runtime from:
 Curated seed facts remain in:
 
 - `lib/games/fact-or-fake/facts.ts`
+
+Runtime mode:
+
+- `FACT_DATA_MODE=curated` (default, quality-first)
+- `FACT_DATA_MODE=hybrid` (curated + generated)
+- `FACT_DATA_MODE=generated` (generated only; not recommended for production)
+
+## 5) Curation workflow tracker
+
+- `data/facts/curation/curation-worklist.json`
+- Track trusted sources, pending topics, and required metadata there.

@@ -1,5 +1,14 @@
 import generatedFactsSource from "@/data/facts/fact-or-fake.generated.json";
-import type { FactCard, FactDeck, FactKind, Language } from "@/lib/shared/types";
+import type {
+  FactCard,
+  FactCardMetadata,
+  FactDeck,
+  FactKind,
+  FactSourceReference,
+  FactSourceType,
+  FactVerificationStatus,
+  Language
+} from "@/lib/shared/types";
 
 interface BilingualText {
   en: string;
@@ -18,10 +27,17 @@ interface BilingualFactPair {
   fakeFact: BilingualText;
 }
 
+interface PairMetadata {
+  source: FactSourceReference;
+  tags: string[];
+  notes?: string;
+}
+
 interface GeneratedFactSource {
   id: string;
   category: LocalizedText;
   text: LocalizedText;
+  metadata?: Partial<FactCardMetadata>;
 }
 
 interface GeneratedFactsPayload {
@@ -36,6 +52,7 @@ interface FactSource {
   category: LocalizedText;
   text: LocalizedText;
   kind: FactKind;
+  metadata: FactCardMetadata;
 }
 
 const FACT_OR_FAKE_SOURCE: BilingualFactPair[] = [
@@ -341,6 +358,186 @@ const FACT_OR_FAKE_SOURCE: BilingualFactPair[] = [
   }
 ];
 
+const CURATED_REVIEWED_AT = "2026-02-16";
+
+const CURATED_PAIR_METADATA: Record<string, PairMetadata> = {
+  "ff-001": {
+    source: {
+      name: "Wikipedia: Octopus",
+      url: "https://en.wikipedia.org/wiki/Octopus"
+    },
+    tags: ["animals", "biology", "ocean"]
+  },
+  "ff-002": {
+    source: {
+      name: "Wikipedia: Anglo-Zanzibar War",
+      url: "https://en.wikipedia.org/wiki/Anglo-Zanzibar_War"
+    },
+    tags: ["history", "war"]
+  },
+  "ff-003": {
+    source: {
+      name: "NASA Venus Facts",
+      url: "https://science.nasa.gov/venus/facts/"
+    },
+    tags: ["space", "planets"]
+  },
+  "ff-004": {
+    source: {
+      name: "National Geographic: Wombat cube poop",
+      url: "https://www.nationalgeographic.com/science/article/how-do-wombats-make-cube-shaped-poop"
+    },
+    tags: ["animals", "nature"]
+  },
+  "ff-005": {
+    source: {
+      name: "Smithsonian: Why honey does not spoil",
+      url: "https://www.smithsonianmag.com/smart-news/honey-doesnt-expire-why-180960106/"
+    },
+    tags: ["food", "chemistry"]
+  },
+  "ff-006": {
+    source: {
+      name: "US EPA: Natural Radioactivity in Food",
+      url: "https://www.epa.gov/radtown/natural-radioactivity-food"
+    },
+    tags: ["science", "food"]
+  },
+  "ff-007": {
+    source: {
+      name: "World Atlas: Countries with most lakes",
+      url: "https://www.worldatlas.com/articles/which-country-has-the-most-lakes-in-the-world.html"
+    },
+    tags: ["geography", "nature"]
+  },
+  "ff-008": {
+    source: {
+      name: "NCBI Bookshelf: Fingerprint development",
+      url: "https://www.ncbi.nlm.nih.gov/books/NBK470476/"
+    },
+    tags: ["human-body", "biology"]
+  },
+  "ff-009": {
+    source: {
+      name: "National Geographic: First computer bug",
+      url: "https://education.nationalgeographic.org/resource/worlds-first-computer-bug/"
+    },
+    tags: ["technology", "history"]
+  },
+  "ff-010": {
+    source: {
+      name: "Britannica: Alphabet",
+      url: "https://www.britannica.com/topic/alphabet"
+    },
+    tags: ["language", "etymology"]
+  },
+  "ff-011": {
+    source: {
+      name: "NOAA: How much ocean have we explored?",
+      url: "https://oceanservice.noaa.gov/facts/exploration.html"
+    },
+    tags: ["ocean", "science"]
+  },
+  "ff-012": {
+    source: {
+      name: "NOAA JetStream: Lightning facts",
+      url: "https://www.noaa.gov/jetstream/lightning/facts"
+    },
+    tags: ["weather", "physics"]
+  },
+  "ff-013": {
+    source: {
+      name: "Britannica: Mona Lisa",
+      url: "https://www.britannica.com/topic/Mona-Lisa-painting-by-Leonardo-da-Vinci"
+    },
+    tags: ["art", "painting"]
+  },
+  "ff-014": {
+    source: {
+      name: "USGA: Why golf balls have dimples",
+      url: "https://www.usga.org/content/usga/home-page/tee-times/features/2018/03/why-do-golf-balls-have-dimples-.html"
+    },
+    tags: ["sports", "physics"]
+  },
+  "ff-015": {
+    source: {
+      name: "Guinness World Records: First speeding ticket",
+      url: "https://www.guinnessworldrecords.com/world-records/first-speeding-ticket"
+    },
+    tags: ["transport", "history"]
+  },
+  "ff-016": {
+    source: {
+      name: "History.com: Typewriter history",
+      url: "https://www.history.com/news/10-things-you-may-not-know-about-the-typewriter"
+    },
+    tags: ["books", "technology", "history"]
+  },
+  "ff-017": {
+    source: {
+      name: "Britannica: Wolfgang Amadeus Mozart",
+      url: "https://www.britannica.com/biography/Wolfgang-Amadeus-Mozart"
+    },
+    tags: ["music", "history"]
+  },
+  "ff-018": {
+    source: {
+      name: "Britannica: Zero",
+      url: "https://www.britannica.com/science/zero-mathematics"
+    },
+    tags: ["math", "history"]
+  },
+  "ff-019": {
+    source: {
+      name: "NASA: The Great Wall from space",
+      url: "https://www.nasa.gov/history/20-years-ago-space-station-astronauts-share-what-they-see-from-space/"
+    },
+    tags: ["architecture", "space", "myth"]
+  },
+  "ff-020": {
+    source: {
+      name: "Britannica: Aspirin",
+      url: "https://www.britannica.com/science/aspirin"
+    },
+    tags: ["medicine", "chemistry"]
+  },
+  "ff-021": {
+    source: {
+      name: "BBC: Why Japan grows square watermelons",
+      url: "https://www.bbc.com/news/world-asia-35548757"
+    },
+    tags: ["culture", "food"]
+  },
+  "ff-022": {
+    source: {
+      name: "National Geographic: Turtles breathe through butt",
+      url: "https://www.nationalgeographic.com/animals/article/turtles-breathe-from-butt"
+    },
+    tags: ["biology", "animals"]
+  },
+  "ff-023": {
+    source: {
+      name: "World History Encyclopedia: Taxation",
+      url: "https://www.worldhistory.org/Taxation/"
+    },
+    tags: ["economics", "history"]
+  },
+  "ff-024": {
+    source: {
+      name: "Smithsonian: Facts about Psycho",
+      url: "https://www.smithsonianmag.com/smart-news/13-things-you-didnt-know-about-psycho-180972142/"
+    },
+    tags: ["cinema", "history"]
+  },
+  "ff-025": {
+    source: {
+      name: "Smithsonian: History of Bubble Wrap",
+      url: "https://www.smithsonianmag.com/innovation/fascinating-history-bubble-wrap-180979596/"
+    },
+    tags: ["inventions", "history"]
+  }
+};
+
 function asLocalizedText(value: unknown): LocalizedText | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -362,6 +559,103 @@ function asLocalizedText(value: unknown): LocalizedText | null {
   };
 }
 
+function asSourceReference(value: unknown): FactSourceReference | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  if (typeof candidate.name !== "string" || typeof candidate.url !== "string") {
+    return undefined;
+  }
+
+  return {
+    name: candidate.name,
+    url: candidate.url
+  };
+}
+
+function asVerificationStatus(value: unknown): FactVerificationStatus | undefined {
+  return value === "verified" || value === "draft" ? value : undefined;
+}
+
+function asSourceType(value: unknown): FactSourceType | undefined {
+  return value === "manual_seed" ||
+    value === "book_extract" ||
+    value === "wikidata" ||
+    value === "wikipedia" ||
+    value === "reference_site"
+    ? value
+    : undefined;
+}
+
+function metadataFromSource(
+  value: unknown,
+  fallback: FactCardMetadata,
+  defaultTags: string[]
+): FactCardMetadata {
+  if (!value || typeof value !== "object") {
+    return {
+      ...fallback,
+      tags: fallback.tags.length > 0 ? fallback.tags : defaultTags
+    };
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return {
+    qualityTier:
+      candidate.qualityTier === "curated" || candidate.qualityTier === "generated"
+        ? candidate.qualityTier
+        : fallback.qualityTier,
+    sourceType: asSourceType(candidate.sourceType) ?? fallback.sourceType,
+    verificationStatus: asVerificationStatus(candidate.verificationStatus) ?? fallback.verificationStatus,
+    familyFriendly: typeof candidate.familyFriendly === "boolean" ? candidate.familyFriendly : fallback.familyFriendly,
+    reviewedAt: typeof candidate.reviewedAt === "string" ? candidate.reviewedAt : fallback.reviewedAt,
+    verifiedAt: typeof candidate.verifiedAt === "string" ? candidate.verifiedAt : fallback.verifiedAt,
+    source: asSourceReference(candidate.source) ?? fallback.source,
+    tags:
+      Array.isArray(candidate.tags) && candidate.tags.every((tag) => typeof tag === "string")
+        ? candidate.tags
+        : fallback.tags.length > 0
+          ? fallback.tags
+          : defaultTags,
+    notes: typeof candidate.notes === "string" ? candidate.notes : fallback.notes
+  };
+}
+
+function metadataForCurated(pairId: string, kind: FactKind): FactCardMetadata {
+  const pairMetadata = CURATED_PAIR_METADATA[pairId];
+
+  return {
+    qualityTier: "curated",
+    sourceType: pairMetadata ? "wikipedia" : "manual_seed",
+    verificationStatus: pairMetadata ? "verified" : "draft",
+    familyFriendly: true,
+    reviewedAt: CURATED_REVIEWED_AT,
+    verifiedAt: pairMetadata ? CURATED_REVIEWED_AT : undefined,
+    source: pairMetadata?.source,
+    tags: [...(pairMetadata?.tags ?? []), kind === "fake" ? "myth" : "fact"],
+    notes: pairMetadata?.notes
+  };
+}
+
+function metadataForGenerated(id: string, kind: FactKind): FactCardMetadata {
+  const isWikidata = id.startsWith("wd-");
+  const sourceType: FactSourceType = isWikidata ? "wikidata" : "book_extract";
+
+  return {
+    qualityTier: "generated",
+    sourceType,
+    verificationStatus: "draft",
+    familyFriendly: false,
+    reviewedAt: CURATED_REVIEWED_AT,
+    tags: [kind === "fake" ? "myth" : "fact", "auto-generated"],
+    notes: "Auto-generated card. Requires editorial review before curated release."
+  };
+}
+
 function toGeneratedFacts(value: unknown, kind: FactKind): FactSource[] {
   if (!Array.isArray(value)) {
     return [];
@@ -378,6 +672,8 @@ function toGeneratedFacts(value: unknown, kind: FactKind): FactSource[] {
     const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
     const category = asLocalizedText(candidate.category);
     const text = asLocalizedText(candidate.text);
+    const fallbackMetadata = metadataForGenerated(id, kind);
+    const metadata = metadataFromSource(candidate.metadata, fallbackMetadata, fallbackMetadata.tags);
 
     if (!id || !category || !text) {
       continue;
@@ -387,7 +683,8 @@ function toGeneratedFacts(value: unknown, kind: FactKind): FactSource[] {
       id,
       category,
       text,
-      kind
+      kind,
+      metadata
     });
   }
 
@@ -403,7 +700,8 @@ function toFactCard(fact: FactSource, language: Language): FactCard {
     id: fact.id,
     category: localizeText(fact.category, language),
     text: localizeText(fact.text, language),
-    kind: fact.kind
+    kind: fact.kind,
+    metadata: fact.metadata
   };
 }
 
@@ -424,22 +722,32 @@ const curatedRealFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   id: `${fact.id}-real`,
   category: fact.category,
   text: fact.realFact,
-  kind: "real"
+  kind: "real",
+  metadata: metadataForCurated(fact.id, "real")
 }));
 
 const curatedFakeFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   id: `${fact.id}-fake`,
   category: fact.category,
   text: fact.fakeFact,
-  kind: "fake"
+  kind: "fake",
+  metadata: metadataForCurated(fact.id, "fake")
 }));
 
 const generatedFacts = generatedFactsSource as GeneratedFactsPayload;
 const generatedRealFacts = toGeneratedFacts(generatedFacts.realFacts, "real");
 const generatedFakeFacts = toGeneratedFacts(generatedFacts.fakeFacts, "fake");
+const FACT_DATA_MODE = process.env.FACT_DATA_MODE ?? "curated";
+const INCLUDE_GENERATED = FACT_DATA_MODE === "hybrid" || FACT_DATA_MODE === "generated";
 
-const REAL_FACT_SOURCE = dedupeById([...curatedRealFacts, ...generatedRealFacts]);
-const FAKE_FACT_SOURCE = dedupeById([...curatedFakeFacts, ...generatedFakeFacts]);
+const REAL_FACT_SOURCE = dedupeById([
+  ...curatedRealFacts,
+  ...(INCLUDE_GENERATED ? generatedRealFacts : [])
+]);
+const FAKE_FACT_SOURCE = dedupeById([
+  ...curatedFakeFacts,
+  ...(INCLUDE_GENERATED ? generatedFakeFacts : [])
+]);
 
 export const FACT_OR_FAKE_REAL_FACT_COUNT = REAL_FACT_SOURCE.length;
 export const FACT_OR_FAKE_FAKE_FACT_COUNT = FAKE_FACT_SOURCE.length;
