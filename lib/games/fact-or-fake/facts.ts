@@ -1,23 +1,15 @@
-import generatedFactsSource from "@/data/facts/fact-or-fake.generated.json";
 import type {
   FactCard,
   FactCardMetadata,
   FactDeck,
   FactKind,
   FactSourceReference,
-  FactSourceType,
-  FactVerificationStatus,
   Language
 } from "@/lib/shared/types";
 
 interface BilingualText {
   en: string;
   ru: string;
-}
-
-interface LocalizedText {
-  en: string;
-  ru?: string;
 }
 
 interface BilingualFactPair {
@@ -33,24 +25,10 @@ interface PairMetadata {
   notes?: string;
 }
 
-interface GeneratedFactSource {
-  id: string;
-  category: LocalizedText;
-  text: LocalizedText;
-  metadata?: Partial<FactCardMetadata>;
-}
-
-interface GeneratedFactsPayload {
-  generatedAt?: string;
-  source?: string;
-  realFacts?: GeneratedFactSource[];
-  fakeFacts?: GeneratedFactSource[];
-}
-
 interface FactSource {
   id: string;
-  category: LocalizedText;
-  text: LocalizedText;
+  category: BilingualText;
+  text: BilingualText;
   kind: FactKind;
   metadata: FactCardMetadata;
 }
@@ -538,95 +516,80 @@ const CURATED_PAIR_METADATA: Record<string, PairMetadata> = {
   }
 };
 
-function asLocalizedText(value: unknown): LocalizedText | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
+const SAFE_BORING_PATTERN =
+  /\b(capital of|currency of|flows into|is in\b|is located in|located in the country|official language of)\b/i;
+const UNSAFE_CONTENT_PATTERN =
+  /\b(sex|sexual|penis|vagina|orgasm|porn|nude|naked|genitals|fetish|explicit|orgy|rape|suicide|self-harm|gore|kill yourself)\b/i;
+const AWKWARD_PUNCTUATION_PATTERN = /(,\.)|(\.{2,})|(\s{2,})|(\(\s*\))/;
+const LOW_SIGNAL_PATTERN = /\b(is in|is located in|is the capital of|the currency of)\b/i;
 
-  const candidate = value as Record<string, unknown>;
-
-  if (typeof candidate.en !== "string") {
-    return null;
-  }
-
-  if (candidate.ru !== undefined && typeof candidate.ru !== "string") {
-    return null;
-  }
-
-  return {
-    en: candidate.en,
-    ru: typeof candidate.ru === "string" ? candidate.ru : undefined
-  };
+function normalizeTag(tag: string): string {
+  return tag
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
 }
 
-function asSourceReference(value: unknown): FactSourceReference | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
+function uniqueTags(tags: string[]): string[] {
+  return [...new Set(tags.map((tag) => normalizeTag(tag)).filter(Boolean))];
+}
+
+function textWordCount(text: string): number {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function hasNonEmptyBilingual(value: BilingualText): boolean {
+  return value.en.trim().length > 0 && value.ru.trim().length > 0;
+}
+
+function isInterestingStatement(text: string): boolean {
+  const words = textWordCount(text);
+
+  if (words < 4 || words > 34) {
+    return false;
   }
 
-  const candidate = value as Record<string, unknown>;
-
-  if (typeof candidate.name !== "string" || typeof candidate.url !== "string") {
-    return undefined;
+  if (LOW_SIGNAL_PATTERN.test(text)) {
+    return false;
   }
 
-  return {
-    name: candidate.name,
-    url: candidate.url
-  };
+  return true;
 }
 
-function asVerificationStatus(value: unknown): FactVerificationStatus | undefined {
-  return value === "verified" || value === "draft" ? value : undefined;
-}
+function passesEditorialTextFilter(text: string): boolean {
+  const trimmed = text.trim();
 
-function asSourceType(value: unknown): FactSourceType | undefined {
-  return value === "manual_seed" ||
-    value === "book_extract" ||
-    value === "wikidata" ||
-    value === "wikipedia" ||
-    value === "reference_site"
-    ? value
-    : undefined;
-}
-
-function metadataFromSource(
-  value: unknown,
-  fallback: FactCardMetadata,
-  defaultTags: string[]
-): FactCardMetadata {
-  if (!value || typeof value !== "object") {
-    return {
-      ...fallback,
-      tags: fallback.tags.length > 0 ? fallback.tags : defaultTags
-    };
+  if (trimmed.length < 12 || trimmed.length > 220) {
+    return false;
   }
 
-  const candidate = value as Record<string, unknown>;
+  if (UNSAFE_CONTENT_PATTERN.test(trimmed)) {
+    return false;
+  }
 
-  return {
-    qualityTier:
-      candidate.qualityTier === "curated" || candidate.qualityTier === "generated"
-        ? candidate.qualityTier
-        : fallback.qualityTier,
-    sourceType: asSourceType(candidate.sourceType) ?? fallback.sourceType,
-    verificationStatus: asVerificationStatus(candidate.verificationStatus) ?? fallback.verificationStatus,
-    familyFriendly: typeof candidate.familyFriendly === "boolean" ? candidate.familyFriendly : fallback.familyFriendly,
-    reviewedAt: typeof candidate.reviewedAt === "string" ? candidate.reviewedAt : fallback.reviewedAt,
-    verifiedAt: typeof candidate.verifiedAt === "string" ? candidate.verifiedAt : fallback.verifiedAt,
-    source: asSourceReference(candidate.source) ?? fallback.source,
-    tags:
-      Array.isArray(candidate.tags) && candidate.tags.every((tag) => typeof tag === "string")
-        ? candidate.tags
-        : fallback.tags.length > 0
-          ? fallback.tags
-          : defaultTags,
-    notes: typeof candidate.notes === "string" ? candidate.notes : fallback.notes
-  };
+  if (AWKWARD_PUNCTUATION_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (SAFE_BORING_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (!isInterestingStatement(trimmed)) {
+    return false;
+  }
+
+  return true;
 }
 
-function metadataForCurated(pairId: string, kind: FactKind): FactCardMetadata {
+function metadataForCurated(pairId: string, kind: FactKind, category: BilingualText): FactCardMetadata {
   const pairMetadata = CURATED_PAIR_METADATA[pairId];
+  const categoryTag = normalizeTag(category.en);
+  const kindTag = kind === "fake" ? "myth" : "fact";
+  const tags = uniqueTags([...(pairMetadata?.tags ?? []), categoryTag, kindTag]);
 
   return {
     qualityTier: "curated",
@@ -636,63 +599,33 @@ function metadataForCurated(pairId: string, kind: FactKind): FactCardMetadata {
     reviewedAt: CURATED_REVIEWED_AT,
     verifiedAt: pairMetadata ? CURATED_REVIEWED_AT : undefined,
     source: pairMetadata?.source,
-    tags: [...(pairMetadata?.tags ?? []), kind === "fake" ? "myth" : "fact"],
+    tags,
     notes: pairMetadata?.notes
   };
 }
 
-function metadataForGenerated(id: string, kind: FactKind): FactCardMetadata {
-  const isWikidata = id.startsWith("wd-");
-  const sourceType: FactSourceType = isWikidata ? "wikidata" : "book_extract";
-
-  return {
-    qualityTier: "generated",
-    sourceType,
-    verificationStatus: "draft",
-    familyFriendly: false,
-    reviewedAt: CURATED_REVIEWED_AT,
-    tags: [kind === "fake" ? "myth" : "fact", "auto-generated"],
-    notes: "Auto-generated card. Requires editorial review before curated release."
-  };
-}
-
-function toGeneratedFacts(value: unknown, kind: FactKind): FactSource[] {
-  if (!Array.isArray(value)) {
-    return [];
+function isPublishableFactSource(fact: FactSource): boolean {
+  if (!fact.id.trim()) {
+    return false;
   }
 
-  const facts: FactSource[] = [];
-
-  for (const row of value) {
-    if (!row || typeof row !== "object") {
-      continue;
-    }
-
-    const candidate = row as Record<string, unknown>;
-    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
-    const category = asLocalizedText(candidate.category);
-    const text = asLocalizedText(candidate.text);
-    const fallbackMetadata = metadataForGenerated(id, kind);
-    const metadata = metadataFromSource(candidate.metadata, fallbackMetadata, fallbackMetadata.tags);
-
-    if (!id || !category || !text) {
-      continue;
-    }
-
-    facts.push({
-      id,
-      category,
-      text,
-      kind,
-      metadata
-    });
+  if (!hasNonEmptyBilingual(fact.category) || !hasNonEmptyBilingual(fact.text)) {
+    return false;
   }
 
-  return facts;
+  if (!fact.metadata.familyFriendly || fact.metadata.verificationStatus !== "verified") {
+    return false;
+  }
+
+  if (!passesEditorialTextFilter(fact.text.en) || !passesEditorialTextFilter(fact.text.ru)) {
+    return false;
+  }
+
+  return true;
 }
 
-function localizeText(text: LocalizedText, language: Language): string {
-  return language === "ru" ? text.ru ?? text.en : text.en;
+function localizeText(text: BilingualText, language: Language): string {
+  return language === "ru" ? text.ru : text.en;
 }
 
 function toFactCard(fact: FactSource, language: Language): FactCard {
@@ -722,32 +655,20 @@ const curatedRealFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   id: `${fact.id}-real`,
   category: fact.category,
   text: fact.realFact,
-  kind: "real",
-  metadata: metadataForCurated(fact.id, "real")
-}));
+  kind: "real" as FactKind,
+  metadata: metadataForCurated(fact.id, "real", fact.category)
+})).filter(isPublishableFactSource);
 
 const curatedFakeFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   id: `${fact.id}-fake`,
   category: fact.category,
   text: fact.fakeFact,
-  kind: "fake",
-  metadata: metadataForCurated(fact.id, "fake")
-}));
+  kind: "fake" as FactKind,
+  metadata: metadataForCurated(fact.id, "fake", fact.category)
+})).filter(isPublishableFactSource);
 
-const generatedFacts = generatedFactsSource as GeneratedFactsPayload;
-const generatedRealFacts = toGeneratedFacts(generatedFacts.realFacts, "real");
-const generatedFakeFacts = toGeneratedFacts(generatedFacts.fakeFacts, "fake");
-const FACT_DATA_MODE = process.env.FACT_DATA_MODE ?? "curated";
-const INCLUDE_GENERATED = FACT_DATA_MODE === "hybrid" || FACT_DATA_MODE === "generated";
-
-const REAL_FACT_SOURCE = dedupeById([
-  ...curatedRealFacts,
-  ...(INCLUDE_GENERATED ? generatedRealFacts : [])
-]);
-const FAKE_FACT_SOURCE = dedupeById([
-  ...curatedFakeFacts,
-  ...(INCLUDE_GENERATED ? generatedFakeFacts : [])
-]);
+const REAL_FACT_SOURCE = dedupeById(curatedRealFacts);
+const FAKE_FACT_SOURCE = dedupeById(curatedFakeFacts);
 
 export const FACT_OR_FAKE_REAL_FACT_COUNT = REAL_FACT_SOURCE.length;
 export const FACT_OR_FAKE_FAKE_FACT_COUNT = FAKE_FACT_SOURCE.length;

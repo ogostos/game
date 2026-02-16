@@ -50,19 +50,18 @@ Optional environment variables:
 
 ## 4) Runtime source
 
-Generated facts are loaded at runtime from:
-
-- `data/facts/fact-or-fake.generated.json`
-
-Curated seed facts remain in:
+Runtime gameplay uses curated cards from:
 
 - `lib/games/fact-or-fake/facts.ts`
 
-Runtime mode:
+Runtime publish gate requires:
 
-- `FACT_DATA_MODE=curated` (default, quality-first)
-- `FACT_DATA_MODE=hybrid` (curated + generated)
-- `FACT_DATA_MODE=generated` (generated only; not recommended for production)
+- `familyFriendly=true`
+- `verificationStatus=verified`
+- bilingual completeness (`en` + `ru`) for category and text
+- editorial text filter pass (unsafe/awkward/boring rejection)
+
+Generated JSON (`data/facts/fact-or-fake.generated.json`) is considered staging input for future curation, not direct runtime content.
 
 ## 5) Curation workflow tracker
 

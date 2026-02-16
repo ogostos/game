@@ -32,19 +32,12 @@ Facts now use two independent pools:
 - `fakeFacts[]` for imposters
 - card-level metadata (`source`, `verificationStatus`, `familyFriendly`, `tags`, review dates)
 
-Current generated dataset:
+Runtime behavior (strict):
 
-- Runtime file: `data/facts/fact-or-fake.generated.json`
-- Real facts: `10043`
-- Fake facts: `5000`
-
-Notes:
-
-- Seed curated facts are still stored in `lib/games/fact-or-fake/facts.ts`.
-- Wikidata imports are bilingual (`en` + `ru`).
-- EPUB-derived facts currently mirror English text in RU fields until a dedicated translation pass is added.
-- Runtime defaults to curated mode (`FACT_DATA_MODE=curated`) for quality.
-- To include generated pools, set `FACT_DATA_MODE=hybrid` (or `generated`).
+- only curated cards are used in gameplay (`lib/games/fact-or-fake/facts.ts`)
+- only `familyFriendly=true` and `verificationStatus=verified` cards are publishable
+- editorial filter removes awkward/low-signal/unsafe text
+- every playable card must have both English and Russian text (no language fallback)
 
 ## Curation Workspace
 
@@ -53,6 +46,8 @@ Notes:
 - This is where the next curated batch (1000-2000 cards) should be tracked and reviewed.
 
 ## Fact Expansion Workflow
+
+Generated/imported datasets are for sourcing and curation support only. They are not used directly in runtime gameplay.
 
 1) Extract from EPUB:
 

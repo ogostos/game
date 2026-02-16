@@ -1,3 +1,4 @@
+import { FACT_OR_FAKE_REAL_FACT_COUNT } from "@/lib/games/fact-or-fake/facts";
 import type { GameId, GameSummary } from "@/lib/shared/types";
 
 const GAMES: GameSummary[] = [
@@ -7,7 +8,7 @@ const GAMES: GameSummary[] = [
     description: "Find the player with fake information before votes are locked.",
     minPlayers: 3,
     maxImposters: 3,
-    factCount: 25
+    factCount: FACT_OR_FAKE_REAL_FACT_COUNT
   }
 ];
 
