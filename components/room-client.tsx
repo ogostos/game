@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LanguageToggle } from "@/components/language-toggle";
 import { getStoredLanguage, setStoredLanguage } from "@/lib/client/language";
@@ -16,6 +16,7 @@ interface RoomClientProps {
 }
 
 const POLL_ERROR_RETRY_MS = 1200;
+const SOLO_TRUE_FALSE_NEXT_DELAY_MS = 1200;
 
 const COPY = {
   en: {
@@ -98,6 +99,7 @@ const COPY = {
     backToLobby: "Back to lobby",
     returning: "Returning...",
     waitingHostDecision: "Waiting for host to start the next round or return to lobby.",
+    autoNextQuestion: "Next question is loading...",
     enterNameError: "Display name is required.",
     syncFailed: "Unable to sync room state.",
     connectionLost: "Connection lost.",
@@ -186,6 +188,7 @@ const COPY = {
     backToLobby: "Вернуться в лобби",
     returning: "Возврат...",
     waitingHostDecision: "Ожидайте решения хоста: новый раунд или возврат в лобби.",
+    autoNextQuestion: "Загружается следующий вопрос...",
     enterNameError: "Введите имя игрока.",
     syncFailed: "Не удалось синхронизировать состояние комнаты.",
     connectionLost: "Потеряно соединение.",
@@ -249,6 +252,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   const versionRef = useRef(0);
+  const autoNextRoundRef = useRef<number | null>(null);
   const syncedDiscussionMinutes = state?.settings.discussionMinutes;
   const syncedImposters = state?.settings.imposters;
   const syncedLanguage = state?.settings.language;
@@ -329,32 +333,35 @@ export function RoomClient({ roomCode }: RoomClientProps) {
     };
   }, [normalizedRoomCode, sessionId, uiLanguage]);
 
-  async function sendAction(action: RoomAction) {
-    if (!sessionId) {
-      return;
-    }
-
-    setWorkingAction(action.type);
-    setError(null);
-
-    try {
-      const response = await postJson<{ state: RoomView }>(`/api/rooms/${normalizedRoomCode}/action`, {
-        sessionId,
-        action
-      });
-
-      versionRef.current = response.state.version;
-      setState(response.state);
-
-      if (action.type === "leave_room") {
-        router.push("/");
+  const sendAction = useCallback(
+    async (action: RoomAction) => {
+      if (!sessionId) {
+        return;
       }
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : COPY[uiLanguage].actionFailed);
-    } finally {
-      setWorkingAction(null);
-    }
-  }
+
+      setWorkingAction(action.type);
+      setError(null);
+
+      try {
+        const response = await postJson<{ state: RoomView }>(`/api/rooms/${normalizedRoomCode}/action`, {
+          sessionId,
+          action
+        });
+
+        versionRef.current = response.state.version;
+        setState(response.state);
+
+        if (action.type === "leave_room") {
+          router.push("/");
+        }
+      } catch (actionError) {
+        setError(actionError instanceof Error ? actionError.message : COPY[uiLanguage].actionFailed);
+      } finally {
+        setWorkingAction(null);
+      }
+    },
+    [normalizedRoomCode, router, sessionId, uiLanguage]
+  );
 
   async function handleJoinRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -409,6 +416,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const isFactOrFake = state?.gameId === "fact-or-fake";
   const isTrueOrFalse = state?.gameId === "true-or-false";
   const isHost = Boolean(state?.joined && state.hostId && state.meId && state.hostId === state.meId);
+  const isSoloTrueFalse = Boolean(isTrueOrFalse && isHost && state?.players.length === 1);
   const phase = state?.phase;
   const maxImposters = state && isFactOrFake ? Math.max(1, Math.min(3, state.players.length - 2)) : 1;
   const discussionSecondsLeft =
@@ -427,6 +435,32 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
     return Object.fromEntries(state.players.map((player) => [player.id, player.displayName]));
   }, [state]);
+
+  useEffect(() => {
+    if (!state?.joined || !isSoloTrueFalse || state.phase !== "results") {
+      return;
+    }
+
+    const roundNumber = state.round?.roundNumber ?? null;
+
+    if (roundNumber === null) {
+      return;
+    }
+
+    if (autoNextRoundRef.current === roundNumber) {
+      return;
+    }
+
+    autoNextRoundRef.current = roundNumber;
+
+    const timeout = window.setTimeout(() => {
+      void sendAction({ type: "play_again" });
+    }, SOLO_TRUE_FALSE_NEXT_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isSoloTrueFalse, sendAction, state?.joined, state?.phase, state?.round?.roundNumber]);
 
   if (!sessionId || (loading && !state)) {
     return (
@@ -769,7 +803,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                   <p />
                 )}
 
-                {isHost ? (
+                {isHost && !isSoloTrueFalse ? (
                   <button
                     className="button-secondary"
                     type="button"
@@ -942,7 +976,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
             )}
           </div>
 
-          {isHost ? (
+          {isHost && !isSoloTrueFalse ? (
             <div className="button-row">
               <button
                 className="button-primary"
@@ -962,6 +996,8 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 {workingAction === "back_to_lobby" ? copy.returning : copy.backToLobby}
               </button>
             </div>
+          ) : isSoloTrueFalse ? (
+            <p className="muted">{copy.autoNextQuestion}</p>
           ) : (
             <p className="muted">{copy.waitingHostDecision}</p>
           )}

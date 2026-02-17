@@ -19,6 +19,11 @@ const COPY = {
   en: {
     modeLabel: "Game Mode",
     totalFacts: "Total facts",
+    quickSoloTitle: "Solo",
+    quickSoloHint: "Start instantly without manual room setup.",
+    playSoloNow: "Play Solo Now",
+    startingSolo: "Starting solo...",
+    multiplayerOptional: "Multiplayer (optional)",
     createRoom: "Create Room",
     joinRoom: "Join Room",
     displayName: "Display name",
@@ -46,6 +51,11 @@ const COPY = {
   ru: {
     modeLabel: "Режим игры",
     totalFacts: "Всего фактов",
+    quickSoloTitle: "Соло",
+    quickSoloHint: "Мгновенный старт без ручного создания комнаты.",
+    playSoloNow: "Играть соло",
+    startingSolo: "Запуск соло...",
+    multiplayerOptional: "Мультиплеер (необязательно)",
     createRoom: "Создать комнату",
     joinRoom: "Войти в комнату",
     displayName: "Имя игрока",
@@ -84,6 +94,7 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
   const [joinPassword, setJoinPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isTrueOrFalse = game.id === "true-or-false";
 
   useEffect(() => {
     const storedLanguage = getStoredLanguage();
@@ -158,6 +169,35 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
     }
   }
 
+  async function handleQuickSolo() {
+    const fallbackName = language === "ru" ? "Игрок" : "Player";
+    const displayName = createName.trim() || fallbackName;
+
+    setPending(true);
+    setError(null);
+
+    try {
+      const sessionId = getOrCreateSessionId();
+      const createResponse = await postJson<{ state: RoomView }>("/api/rooms/create", {
+        sessionId,
+        displayName,
+        gameId: game.id,
+        language: roomLanguage
+      });
+
+      await postJson<{ state: RoomView }>(`/api/rooms/${createResponse.state.roomCode}/action`, {
+        sessionId,
+        action: { type: "start_round" }
+      });
+
+      router.push(`/room/${createResponse.state.roomCode}`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : copy.createFailed);
+    } finally {
+      setPending(false);
+    }
+  }
+
   const copy = COPY[language];
   const localizedGame = gameText(game.id, language);
 
@@ -176,6 +216,30 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
         </p>
       </div>
 
+      {isTrueOrFalse ? (
+        <section className="card-panel stack-md">
+          <p className="eyebrow">{copy.quickSoloTitle}</p>
+          <p className="muted">{copy.quickSoloHint}</p>
+
+          <label className="input-label" htmlFor="quick-solo-name">
+            {copy.displayName}
+          </label>
+          <input
+            id="quick-solo-name"
+            className="text-input"
+            value={createName}
+            onChange={(event) => setCreateName(event.target.value)}
+            placeholder={copy.yourName}
+            maxLength={24}
+            autoComplete="nickname"
+          />
+
+          <button className="button-primary" type="button" onClick={handleQuickSolo} disabled={pending}>
+            {pending ? copy.startingSolo : copy.playSoloNow}
+          </button>
+        </section>
+      ) : null}
+
       <div className="segmented-control" role="tablist" aria-label="Room entry mode">
         <button
           type="button"
@@ -192,6 +256,8 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
           {copy.joinRoom}
         </button>
       </div>
+
+      {isTrueOrFalse ? <p className="muted">{copy.multiplayerOptional}</p> : null}
 
       {mode === "create" ? (
         <form className="stack-md" onSubmit={handleCreate}>
