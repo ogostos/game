@@ -832,7 +832,7 @@ function toFactCard(fact: FactSource, language: Language): FactCard {
     kind: fact.kind,
     correction: fact.correction ? localizeText(fact.correction, language) : null,
     metadata: fact.metadata
-  };
+  } as FactCard;
 }
 
 function dedupeById(facts: FactSource[]): FactSource[] {
