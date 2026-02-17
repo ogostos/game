@@ -22,6 +22,16 @@ const GAME_TEXT: Record<
       title: "Правда или Фейк",
       description: "Найдите игрока с фейком до завершения голосования."
     }
+  },
+  "true-or-false": {
+    en: {
+      title: "True or False",
+      description: "A statement appears for everyone. Decide if it is true or false."
+    },
+    ru: {
+      title: "Правда или Ложь",
+      description: "Для всех показывается одно утверждение. Решите, правда это или ложь."
+    }
   }
 };
 

@@ -1,10 +1,11 @@
-export type GameId = "fact-or-fake";
+export type GameId = "fact-or-fake" | "true-or-false";
 export type Language = "en" | "ru";
 
 export type RoomPhase = "lobby" | "discussion" | "voting" | "results";
 
 export type PlayerRole = "truth" | "imposter";
 export type FactKind = "real" | "fake";
+export type TrueFalseAnswer = "true" | "false";
 export type FactQualityTier = "curated" | "generated";
 export type FactSourceType = "manual_seed" | "book_extract" | "wikidata" | "wikipedia" | "reference_site";
 export type FactVerificationStatus = "draft" | "verified";
@@ -38,6 +39,7 @@ export interface GameSummary {
   description: string;
   minPlayers: number;
   maxImposters: number;
+  supportsImposters: boolean;
   factCount: number;
 }
 
@@ -46,6 +48,7 @@ export interface FactCard {
   category: string;
   text: string;
   kind: FactKind;
+  correction: string | null;
   metadata: FactCardMetadata;
 }
 
@@ -67,6 +70,7 @@ export interface AssignmentRecord {
   factId: string;
   category: string;
   factKind: FactKind;
+  factCorrection: string | null;
   factMetadata: FactCardMetadata;
 }
 
@@ -79,6 +83,7 @@ export interface RoundResult {
   votes: Record<string, string>;
   voteCounts: Record<string, number>;
   imposters: string[];
+  correctAnswer: TrueFalseAnswer | null;
   cards: Record<string, AssignmentRecord>;
   facts: RoundFactsSummary;
 }
@@ -87,8 +92,10 @@ export interface RoundRecord {
   roundNumber: number;
   usedFactIds: string[];
   assignments: Record<string, AssignmentRecord>;
+  swapsUsed: Record<string, number>;
   discussionEndsAt: number;
   votes: Record<string, string>;
+  correctAnswer: TrueFalseAnswer | null;
   revealed: boolean;
   result: RoundResult | null;
 }
@@ -120,7 +127,10 @@ export interface PublicRound {
   discussionEndsAt: number | null;
   myCard: string | null;
   myRole: PlayerRole | null;
+  mySwapsRemaining: number;
   myVote: string | null;
+  myAnswer: TrueFalseAnswer | null;
+  correctAnswer: TrueFalseAnswer | null;
   imposters: string[] | null;
   votes: Record<string, string> | null;
   voteCounts: Record<string, number> | null;
@@ -161,7 +171,14 @@ export type RoomAction =
       targetPlayerId: string;
     }
   | {
+      type: "answer_true_false";
+      answer: TrueFalseAnswer;
+    }
+  | {
       type: "reveal_results";
+    }
+  | {
+      type: "swap_card";
     }
   | {
       type: "end_discussion";
@@ -210,3 +227,4 @@ export const MIN_PLAYERS = 3;
 export const MIN_DISCUSSION_MINUTES = 1;
 export const MAX_DISCUSSION_MINUTES = 5;
 export const MAX_NAME_LENGTH = 24;
+export const SWAP_LIMIT_PER_ROUND = 2;

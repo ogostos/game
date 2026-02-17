@@ -63,7 +63,17 @@ const COPY = {
     endDiscussion: "End discussion",
     endingDiscussion: "Ending...",
     discussionHint: "Discuss as a group. Voting starts automatically when timer reaches zero.",
+    swapsRemaining: "Swaps left",
+    swapCard: "Swap card",
+    swapping: "Swapping...",
     votingTitle: "Vote: who has the fake fact?",
+    trueFalseTitle: "True or False?",
+    answerTrue: "True",
+    answerFalse: "False",
+    yourAnswerPrefix: "Your answer",
+    correctAnswer: "Correct answer",
+    correct: "Correct",
+    incorrect: "Incorrect",
     yourVotePrefix: "You voted for",
     revealEarly: "Reveal early",
     revealing: "Revealing...",
@@ -77,6 +87,7 @@ const COPY = {
     roundFacts: "Round facts",
     realFacts: "Real facts",
     fakeFacts: "Fake facts",
+    correction: "Correction",
     factsUnavailable: "Facts unavailable.",
     truth: "Truth",
     fake: "Fake",
@@ -140,7 +151,17 @@ const COPY = {
     endDiscussion: "Завершить обсуждение",
     endingDiscussion: "Завершение...",
     discussionHint: "Обсудите факты в группе. После таймера начнется голосование.",
+    swapsRemaining: "Осталось замен",
+    swapCard: "Заменить карточку",
+    swapping: "Замена...",
     votingTitle: "Голосование: кто получил фейковый факт?",
+    trueFalseTitle: "Правда или ложь?",
+    answerTrue: "Правда",
+    answerFalse: "Ложь",
+    yourAnswerPrefix: "Ваш ответ",
+    correctAnswer: "Верный ответ",
+    correct: "Верно",
+    incorrect: "Неверно",
     yourVotePrefix: "Ваш голос:",
     revealEarly: "Открыть раньше",
     revealing: "Открытие...",
@@ -154,6 +175,7 @@ const COPY = {
     roundFacts: "Факты раунда",
     realFacts: "Реальные факты",
     fakeFacts: "Фейковые факты",
+    correction: "Исправление",
     factsUnavailable: "Список фактов недоступен.",
     truth: "Правда",
     fake: "Фейк",
@@ -194,6 +216,20 @@ function formatCountdown(totalSeconds: number): string {
 function roleLabel(language: Language, role: "truth" | "imposter" | null | undefined): string {
   const copy = COPY[language];
   return role === "imposter" ? copy.roleImposter : copy.roleTruth;
+}
+
+function answerLabel(language: Language, answer: "true" | "false" | null | undefined): string {
+  const copy = COPY[language];
+
+  if (answer === "true") {
+    return copy.answerTrue;
+  }
+
+  if (answer === "false") {
+    return copy.answerFalse;
+  }
+
+  return copy.unknown;
 }
 
 export function RoomClient({ roomCode }: RoomClientProps) {
@@ -370,13 +406,16 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
   const copy = COPY[uiLanguage];
   const localizedGame = state ? gameText(state.gameId, uiLanguage) : gameText("fact-or-fake", uiLanguage);
+  const isFactOrFake = state?.gameId === "fact-or-fake";
+  const isTrueOrFalse = state?.gameId === "true-or-false";
   const isHost = Boolean(state?.joined && state.hostId && state.meId && state.hostId === state.meId);
   const phase = state?.phase;
-  const maxImposters = state ? Math.max(1, Math.min(3, state.players.length - 2)) : 1;
+  const maxImposters = state && isFactOrFake ? Math.max(1, Math.min(3, state.players.length - 2)) : 1;
   const discussionSecondsLeft =
     state?.phase === "discussion" && state.round?.discussionEndsAt
       ? Math.max(0, Math.ceil((state.round.discussionEndsAt - now) / 1000))
       : 0;
+  const mySwapsRemaining = state?.round?.mySwapsRemaining ?? 0;
   const roundRealFacts = state?.round?.facts?.real ?? [];
   const roundFakeFacts = state?.round?.facts?.fake ?? [];
   const totalRoundFacts = roundRealFacts.length + roundFakeFacts.length;
@@ -555,23 +594,25 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 />
               </div>
 
-              <div className="stack-sm">
-                <label className="input-label" htmlFor="imposter-count">
-                  {copy.imposterCount}
-                </label>
-                <select
-                  id="imposter-count"
-                  className="text-input"
-                  value={settingsImposters}
-                  onChange={(event) => setSettingsImposters(Number(event.target.value))}
-                >
-                  {Array.from({ length: maxImposters }, (_, index) => index + 1).map((count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isFactOrFake ? (
+                <div className="stack-sm">
+                  <label className="input-label" htmlFor="imposter-count">
+                    {copy.imposterCount}
+                  </label>
+                  <select
+                    id="imposter-count"
+                    className="text-input"
+                    value={settingsImposters}
+                    onChange={(event) => setSettingsImposters(Number(event.target.value))}
+                  >
+                    {Array.from({ length: maxImposters }, (_, index) => index + 1).map((count) => (
+                      <option key={count} value={count}>
+                        {count}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
 
               <div className="stack-sm">
                 <label className="input-label" htmlFor="room-language-select">
@@ -634,89 +675,162 @@ export function RoomClient({ roomCode }: RoomClientProps) {
               {roleLabel(uiLanguage, state.round?.myRole)}
             </h3>
             <p>{state.round?.myCard}</p>
+            {isFactOrFake ? (
+              <p className="muted">
+                {copy.swapsRemaining}: {mySwapsRemaining}
+              </p>
+            ) : null}
           </article>
 
-          {isHost ? (
-            <div className="button-row">
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => sendAction({ type: "extend_discussion", seconds: 30 })}
-                disabled={workingAction === "extend_discussion"}
-              >
-                {workingAction === "extend_discussion" ? copy.extending : copy.extend30}
-              </button>
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => sendAction({ type: "extend_discussion", seconds: 60 })}
-                disabled={workingAction === "extend_discussion"}
-              >
-                {workingAction === "extend_discussion" ? copy.extending : copy.extend60}
-              </button>
-              <button
-                className="button-primary"
-                type="button"
-                onClick={() => sendAction({ type: "end_discussion" })}
-                disabled={workingAction === "end_discussion"}
-              >
-                {workingAction === "end_discussion" ? copy.endingDiscussion : copy.endDiscussion}
-              </button>
-            </div>
-          ) : (
-            <p className="muted">{copy.discussionHint}</p>
-          )}
+          {isFactOrFake ? (
+            <>
+              <div className="button-row">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  onClick={() => sendAction({ type: "swap_card" })}
+                  disabled={workingAction === "swap_card" || mySwapsRemaining <= 0}
+                >
+                  {workingAction === "swap_card" ? copy.swapping : copy.swapCard}
+                </button>
+              </div>
+
+              {isHost ? (
+                <div className="button-row">
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => sendAction({ type: "extend_discussion", seconds: 30 })}
+                    disabled={workingAction === "extend_discussion"}
+                  >
+                    {workingAction === "extend_discussion" ? copy.extending : copy.extend30}
+                  </button>
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => sendAction({ type: "extend_discussion", seconds: 60 })}
+                    disabled={workingAction === "extend_discussion"}
+                  >
+                    {workingAction === "extend_discussion" ? copy.extending : copy.extend60}
+                  </button>
+                  <button
+                    className="button-primary"
+                    type="button"
+                    onClick={() => sendAction({ type: "end_discussion" })}
+                    disabled={workingAction === "end_discussion"}
+                  >
+                    {workingAction === "end_discussion" ? copy.endingDiscussion : copy.endDiscussion}
+                  </button>
+                </div>
+              ) : (
+                <p className="muted">{copy.discussionHint}</p>
+              )}
+            </>
+          ) : null}
         </section>
       ) : null}
 
       {phase === "voting" ? (
         <section className="panel stack-md slide-up">
-          <h2 className="title-sm">{copy.votingTitle}</h2>
+          {isTrueOrFalse ? (
+            <>
+              <h2 className="title-sm">{copy.trueFalseTitle}</h2>
 
-          <article className="card-panel">
-            <p className="eyebrow">{copy.yourCard}</p>
-            <h3 className={state.round?.myRole === "imposter" ? "role-badge imposter" : "role-badge truth"}>
-              {roleLabel(uiLanguage, state.round?.myRole)}
-            </h3>
-            <p>{state.round?.myCard}</p>
-          </article>
+              <article className="card-panel">
+                <p className="eyebrow">{copy.yourCard}</p>
+                <p>{state.round?.myCard}</p>
+              </article>
 
-          <div className="vote-grid">
-            {state.players
-              .filter((player) => player.id !== state.meId)
-              .map((player) => (
+              <div className="vote-grid">
                 <button
-                  key={player.id}
-                  className={state.round?.myVote === player.id ? "vote-option active" : "vote-option"}
+                  className={state.round?.myAnswer === "true" ? "vote-option active" : "vote-option"}
                   type="button"
-                  onClick={() => sendAction({ type: "cast_vote", targetPlayerId: player.id })}
-                  disabled={workingAction === "cast_vote"}
+                  onClick={() => sendAction({ type: "answer_true_false", answer: "true" })}
+                  disabled={workingAction === "answer_true_false"}
                 >
-                  {player.displayName}
+                  {copy.answerTrue}
                 </button>
-              ))}
-          </div>
+                <button
+                  className={state.round?.myAnswer === "false" ? "vote-option active" : "vote-option"}
+                  type="button"
+                  onClick={() => sendAction({ type: "answer_true_false", answer: "false" })}
+                  disabled={workingAction === "answer_true_false"}
+                >
+                  {copy.answerFalse}
+                </button>
+              </div>
 
-          <div className="row-wrap space-between">
-            {state.round?.myVote ? (
-              <p className="muted">
-                {copy.yourVotePrefix} {playersById[state.round.myVote]}.
-              </p>
-            ) : (
-              <p />
-            )}
+              <div className="row-wrap space-between">
+                {state.round?.myAnswer ? (
+                  <p className="muted">
+                    {copy.yourAnswerPrefix}: {answerLabel(uiLanguage, state.round.myAnswer)}.
+                  </p>
+                ) : (
+                  <p />
+                )}
 
-            {isHost ? (
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => sendAction({ type: "reveal_results" })}
-                disabled={workingAction === "reveal_results"}
-              >
-                {workingAction === "reveal_results" ? copy.revealing : copy.revealEarly}
-              </button>
-            ) : null}
-          </div>
+                {isHost ? (
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => sendAction({ type: "reveal_results" })}
+                    disabled={workingAction === "reveal_results"}
+                  >
+                    {workingAction === "reveal_results" ? copy.revealing : copy.revealEarly}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="title-sm">{copy.votingTitle}</h2>
+
+              <article className="card-panel">
+                <p className="eyebrow">{copy.yourCard}</p>
+                <h3 className={state.round?.myRole === "imposter" ? "role-badge imposter" : "role-badge truth"}>
+                  {roleLabel(uiLanguage, state.round?.myRole)}
+                </h3>
+                <p>{state.round?.myCard}</p>
+              </article>
+
+              <div className="vote-grid">
+                {state.players
+                  .filter((player) => player.id !== state.meId)
+                  .map((player) => (
+                    <button
+                      key={player.id}
+                      className={state.round?.myVote === player.id ? "vote-option active" : "vote-option"}
+                      type="button"
+                      onClick={() => sendAction({ type: "cast_vote", targetPlayerId: player.id })}
+                      disabled={workingAction === "cast_vote"}
+                    >
+                      {player.displayName}
+                    </button>
+                  ))}
+              </div>
+
+              <div className="row-wrap space-between">
+                {state.round?.myVote ? (
+                  <p className="muted">
+                    {copy.yourVotePrefix} {playersById[state.round.myVote]}.
+                  </p>
+                ) : (
+                  <p />
+                )}
+
+                {isHost ? (
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={() => sendAction({ type: "reveal_results" })}
+                    disabled={workingAction === "reveal_results"}
+                  >
+                    {workingAction === "reveal_results" ? copy.revealing : copy.revealEarly}
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -724,43 +838,75 @@ export function RoomClient({ roomCode }: RoomClientProps) {
         <section className="panel stack-md slide-up">
           <h2 className="title-sm">{copy.results}</h2>
 
-          <article className="card-panel">
-            <p className="eyebrow">{copy.imposters}</p>
-            <p>
-              {(state.round?.imposters ?? []).map((playerId) => playersById[playerId] ?? copy.unknown).join(", ") ||
-                copy.none}
-            </p>
-          </article>
+          {isTrueOrFalse ? (
+            <>
+              <article className="card-panel">
+                <p className="eyebrow">{copy.correctAnswer}</p>
+                <p>{answerLabel(uiLanguage, state.round?.correctAnswer ?? null)}</p>
+              </article>
 
-          <div className="stack-sm">
-            <h3 className="title-xs">{copy.votes}</h3>
-            {state.round?.votes && Object.keys(state.round.votes).length > 0 ? (
-              <div className="stack-xs">
-                {Object.entries(state.round.votes).map(([voterId, targetId]) => (
-                  <p key={voterId} className="muted">
-                    {playersById[voterId] ?? copy.unknown} → {playersById[targetId] ?? copy.unknown}
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">{copy.noVotes}</p>
-            )}
-          </div>
+              <div className="stack-sm">
+                <h3 className="title-xs">{copy.votes}</h3>
+                {state.round?.votes && Object.keys(state.round.votes).length > 0 ? (
+                  <div className="stack-xs">
+                    {Object.entries(state.round.votes).map(([playerId, answer]) => {
+                      const isCorrect = answer === state.round?.correctAnswer;
 
-          <div className="stack-sm">
-            <h3 className="title-xs">{copy.dealtCards}</h3>
-            {state.round?.cards ? (
-              <div className="stack-xs">
-                {Object.entries(state.round.cards).map(([playerId, cardInfo]) => (
-                  <p key={playerId} className="muted">
-                    <strong>{playersById[playerId] ?? copy.unknown}:</strong> {cardInfo.card} ({roleLabel(uiLanguage, cardInfo.role)})
-                  </p>
-                ))}
+                      return (
+                        <p key={playerId} className="muted">
+                          <strong>{playersById[playerId] ?? copy.unknown}:</strong> {answerLabel(uiLanguage, answer as "true" | "false")} (
+                          {isCorrect ? copy.correct : copy.incorrect})
+                        </p>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="muted">{copy.noVotes}</p>
+                )}
               </div>
-            ) : (
-              <p className="muted">{copy.cardsUnavailable}</p>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <article className="card-panel">
+                <p className="eyebrow">{copy.imposters}</p>
+                <p>
+                  {(state.round?.imposters ?? []).map((playerId) => playersById[playerId] ?? copy.unknown).join(", ") ||
+                    copy.none}
+                </p>
+              </article>
+
+              <div className="stack-sm">
+                <h3 className="title-xs">{copy.votes}</h3>
+                {state.round?.votes && Object.keys(state.round.votes).length > 0 ? (
+                  <div className="stack-xs">
+                    {Object.entries(state.round.votes).map(([voterId, targetId]) => (
+                      <p key={voterId} className="muted">
+                        {playersById[voterId] ?? copy.unknown} → {playersById[targetId] ?? copy.unknown}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">{copy.noVotes}</p>
+                )}
+              </div>
+
+              <div className="stack-sm">
+                <h3 className="title-xs">{copy.dealtCards}</h3>
+                {state.round?.cards ? (
+                  <div className="stack-xs">
+                    {Object.entries(state.round.cards).map(([playerId, cardInfo]) => (
+                      <p key={playerId} className="muted">
+                        <strong>{playersById[playerId] ?? copy.unknown}:</strong> {cardInfo.card} (
+                        {roleLabel(uiLanguage, cardInfo.role)})
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">{copy.cardsUnavailable}</p>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="stack-sm">
             <h3 className="title-xs">
@@ -782,6 +928,12 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 {roundFakeFacts.map((fact) => (
                   <p key={fact.id} className="muted">
                     <strong>{fact.category}:</strong> {fact.text}
+                    {fact.correction ? (
+                      <>
+                        {" "}
+                        <strong>{copy.correction}:</strong> {fact.correction}
+                      </>
+                    ) : null}
                   </p>
                 ))}
               </div>

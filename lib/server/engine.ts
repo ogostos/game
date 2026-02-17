@@ -15,6 +15,7 @@ import {
   MAX_DISCUSSION_MINUTES,
   MIN_DISCUSSION_MINUTES,
   MIN_PLAYERS,
+  SWAP_LIMIT_PER_ROUND,
   type ActionInput,
   type AssignmentRecord,
   type CreateRoomInput,
@@ -23,7 +24,8 @@ import {
   type JoinRoomInput,
   type PlayerRecord,
   type RoomRecord,
-  type RoomView
+  type RoomView,
+  type TrueFalseAnswer
 } from "@/lib/shared/types";
 
 const MAX_ROOM_CODE_ATTEMPTS = 30;
@@ -64,6 +66,113 @@ function shuffle<T>(values: T[]): T[] {
   return copy;
 }
 
+interface FactConflictKeys {
+  realTextKeys: Set<string>;
+  fakeTextKeys: Set<string>;
+  fakeCorrectionKeys: Set<string>;
+}
+
+function createEmptyConflictKeys(): FactConflictKeys {
+  return {
+    realTextKeys: new Set<string>(),
+    fakeTextKeys: new Set<string>(),
+    fakeCorrectionKeys: new Set<string>()
+  };
+}
+
+function normalizeFactKey(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .toLowerCase()
+    .replace(/["'`]/g, "")
+    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function collectConflictKeysFromCards(realFacts: FactCard[], fakeFacts: FactCard[]): FactConflictKeys {
+  const keys = createEmptyConflictKeys();
+
+  for (const fact of realFacts) {
+    const textKey = normalizeFactKey(fact.text);
+
+    if (textKey) {
+      keys.realTextKeys.add(textKey);
+    }
+  }
+
+  for (const fact of fakeFacts) {
+    const textKey = normalizeFactKey(fact.text);
+    const correctionKey = normalizeFactKey(fact.correction);
+
+    if (textKey) {
+      keys.fakeTextKeys.add(textKey);
+    }
+
+    if (correctionKey) {
+      keys.fakeCorrectionKeys.add(correctionKey);
+    }
+  }
+
+  return keys;
+}
+
+function collectConflictKeysFromAssignments(
+  assignments: Record<string, AssignmentRecord>,
+  excludePlayerId?: string
+): FactConflictKeys {
+  const keys = createEmptyConflictKeys();
+
+  for (const [playerId, assignment] of Object.entries(assignments)) {
+    if (excludePlayerId && playerId === excludePlayerId) {
+      continue;
+    }
+
+    const textKey = normalizeFactKey(assignment.card);
+    const correctionKey = normalizeFactKey(assignment.factCorrection);
+
+    if (assignment.factKind === "fake") {
+      if (textKey) {
+        keys.fakeTextKeys.add(textKey);
+      }
+
+      if (correctionKey) {
+        keys.fakeCorrectionKeys.add(correctionKey);
+      }
+    } else if (textKey) {
+      keys.realTextKeys.add(textKey);
+    }
+  }
+
+  return keys;
+}
+
+function conflictsWithOppositeSide(
+  fact: FactCard,
+  factKind: "real" | "fake",
+  conflictKeys: FactConflictKeys
+): boolean {
+  const textKey = normalizeFactKey(fact.text);
+
+  if (!textKey) {
+    return true;
+  }
+
+  if (factKind === "real") {
+    return conflictKeys.fakeTextKeys.has(textKey) || conflictKeys.fakeCorrectionKeys.has(textKey);
+  }
+
+  const correctionKey = normalizeFactKey(fact.correction);
+
+  return (
+    conflictKeys.realTextKeys.has(textKey) ||
+    (Boolean(correctionKey) && conflictKeys.realTextKeys.has(correctionKey))
+  );
+}
+
 function pickFromPool(
   facts: FactCard[],
   recentFactIds: Set<string>,
@@ -95,15 +204,36 @@ function pickFactsForRound(
   recentFactIds: Set<string>
 ): FactDeck {
   const facts = getFactsForGame(gameId, language);
+  const selectedFakeFacts = pickFromPool(facts.fakeFacts, recentFactIds, imposterCount, "fake");
+  const fakeConflictKeys = collectConflictKeysFromCards([], selectedFakeFacts);
+  const compatibleRealFacts = facts.realFacts.filter(
+    (fact) => !conflictsWithOppositeSide(fact, "real", fakeConflictKeys)
+  );
+
+  if (compatibleRealFacts.length < truthCount) {
+    throw new AppError(
+      409,
+      `Not enough real facts that do not overlap with selected fake facts. Need ${truthCount}, available ${compatibleRealFacts.length}.`
+    );
+  }
 
   return {
-    realFacts: pickFromPool(facts.realFacts, recentFactIds, truthCount, "real"),
-    fakeFacts: pickFromPool(facts.fakeFacts, recentFactIds, imposterCount, "fake")
+    realFacts: pickFromPool(compatibleRealFacts, recentFactIds, truthCount, "real"),
+    fakeFacts: selectedFakeFacts
   };
+}
+
+function minPlayersForRoom(room: RoomRecord): number {
+  return getGame(room.gameId)?.minPlayers ?? MIN_PLAYERS;
 }
 
 function computeMaxImposters(room: RoomRecord): number {
   const game = getGame(room.gameId);
+
+  if (!game?.supportsImposters) {
+    return 1;
+  }
+
   const maxByPlayerCount = Math.max(1, toSortedPlayers(room).length - 2);
   const maxByGame = game?.maxImposters ?? 1;
 
@@ -147,32 +277,50 @@ function finalizeRound(room: RoomRecord): void {
     throw new AppError(409, "No active round to reveal.");
   }
 
-  const imposters = Object.entries(room.round.assignments)
-    .filter(([, assignment]) => assignment.role === "imposter")
-    .map(([playerId]) => playerId);
   const voteCounts = buildVoteCounts(room.round.votes);
-  const imposterSet = new Set(imposters);
   const activePlayers = toSortedPlayers(room);
+  const imposters =
+    room.gameId === "fact-or-fake"
+      ? Object.entries(room.round.assignments)
+          .filter(([, assignment]) => assignment.role === "imposter")
+          .map(([playerId]) => playerId)
+      : [];
 
-  for (const player of activePlayers) {
-    const vote = room.round.votes[player.id];
+  if (room.gameId === "fact-or-fake") {
+    const imposterSet = new Set(imposters);
 
-    if (!vote) {
-      continue;
+    for (const player of activePlayers) {
+      const vote = room.round.votes[player.id];
+
+      if (!vote) {
+        continue;
+      }
+
+      if (!imposterSet.has(player.id) && imposterSet.has(vote)) {
+        player.score += 1;
+      }
     }
 
-    if (!imposterSet.has(player.id) && imposterSet.has(vote)) {
-      player.score += 1;
+    const survivalThreshold = Math.ceil(activePlayers.length / 2);
+
+    for (const imposterId of imposters) {
+      const votesAgainst = voteCounts[imposterId] ?? 0;
+
+      if (votesAgainst < survivalThreshold && room.players[imposterId]) {
+        room.players[imposterId].score += 1;
+      }
     }
-  }
+  } else {
+    const correctAnswer = room.round.correctAnswer;
 
-  const survivalThreshold = Math.ceil(activePlayers.length / 2);
+    if (!correctAnswer) {
+      throw new AppError(500, "True or False round has no correct answer.");
+    }
 
-  for (const imposterId of imposters) {
-    const votesAgainst = voteCounts[imposterId] ?? 0;
-
-    if (votesAgainst < survivalThreshold && room.players[imposterId]) {
-      room.players[imposterId].score += 1;
+    for (const player of activePlayers) {
+      if (room.round.votes[player.id] === correctAnswer) {
+        player.score += 1;
+      }
     }
   }
 
@@ -188,6 +336,7 @@ function finalizeRound(room: RoomRecord): void {
         category: assignment.category,
         text: assignment.card,
         kind: assignment.factKind,
+        correction: assignment.factCorrection,
         metadata: assignment.factMetadata
       });
     }
@@ -198,6 +347,7 @@ function finalizeRound(room: RoomRecord): void {
     votes: { ...room.round.votes },
     voteCounts,
     imposters,
+    correctAnswer: room.round.correctAnswer,
     cards: Object.fromEntries(
       Object.entries(room.round.assignments).map(([playerId, assignment]) => [playerId, { ...assignment }])
     ),
@@ -231,13 +381,7 @@ function applyAutomaticTransitions(room: RoomRecord): boolean {
   return changed;
 }
 
-function startRound(room: RoomRecord): void {
-  const players = toSortedPlayers(room);
-
-  if (players.length < MIN_PLAYERS) {
-    throw new AppError(409, `At least ${MIN_PLAYERS} players are required to start.`);
-  }
-
+function startFactOrFakeRound(room: RoomRecord, players: PlayerRecord[]): void {
   const impostersToAssign = clampImposters(room, room.settings.imposters);
   room.settings.imposters = impostersToAssign;
 
@@ -270,6 +414,7 @@ function startRound(room: RoomRecord): void {
       factId: fact.id,
       category: fact.category,
       factKind: fact.kind,
+      factCorrection: fact.correction,
       factMetadata: fact.metadata
     };
   }
@@ -278,18 +423,86 @@ function startRound(room: RoomRecord): void {
     roundNumber: (room.round?.roundNumber ?? 0) + 1,
     usedFactIds: [...factsForRound.realFacts, ...factsForRound.fakeFacts].map((fact) => fact.id),
     assignments,
+    swapsUsed: Object.fromEntries(playerIds.map((playerId) => [playerId, 0])),
     discussionEndsAt: Date.now() + room.settings.discussionMinutes * 60_000,
     votes: {},
+    correctAnswer: null,
     revealed: false,
     result: null
   };
   room.phase = "discussion";
+}
+
+function startTrueOrFalseRound(room: RoomRecord, players: PlayerRecord[]): void {
+  const facts = getFactsForGame(room.gameId, room.settings.language);
+  const candidates = [...facts.realFacts, ...facts.fakeFacts];
+
+  if (candidates.length === 0) {
+    throw new AppError(500, "No facts configured for True or False.");
+  }
+
+  const recentFactIds = new Set(room.round?.usedFactIds ?? []);
+  const freshCandidates = candidates.filter((card) => !recentFactIds.has(card.id));
+  const sourcePool = freshCandidates.length > 0 ? freshCandidates : candidates;
+  const pickedFact = shuffle(sourcePool)[0];
+
+  if (!pickedFact) {
+    throw new AppError(500, "Could not pick a fact for this round.");
+  }
+
+  const playerIds = players.map((player) => player.id);
+  const assignments: Record<string, AssignmentRecord> = {};
+
+  for (const playerId of playerIds) {
+    assignments[playerId] = {
+      role: "truth",
+      card: pickedFact.text,
+      factId: pickedFact.id,
+      category: pickedFact.category,
+      factKind: pickedFact.kind,
+      factCorrection: pickedFact.correction,
+      factMetadata: pickedFact.metadata
+    };
+  }
+
+  room.round = {
+    roundNumber: (room.round?.roundNumber ?? 0) + 1,
+    usedFactIds: [pickedFact.id],
+    assignments,
+    swapsUsed: Object.fromEntries(playerIds.map((playerId) => [playerId, 0])),
+    discussionEndsAt: 0,
+    votes: {},
+    correctAnswer: pickedFact.kind === "real" ? "true" : "false",
+    revealed: false,
+    result: null
+  };
+  room.phase = "voting";
+}
+
+function startRound(room: RoomRecord): void {
+  const players = toSortedPlayers(room);
+  const minPlayers = minPlayersForRoom(room);
+
+  if (players.length < minPlayers) {
+    throw new AppError(409, `At least ${minPlayers} players are required to start.`);
+  }
+
+  if (room.gameId === "true-or-false") {
+    startTrueOrFalseRound(room, players);
+  } else {
+    startFactOrFakeRound(room, players);
+  }
+
   markUpdated(room);
 }
 
 function endDiscussion(room: RoomRecord): void {
   if (!room.round || room.phase !== "discussion") {
     throw new AppError(409, "Discussion is not active.");
+  }
+
+  if (room.gameId !== "fact-or-fake") {
+    throw new AppError(409, "Discussion controls are only available in Fact or Fake.");
   }
 
   room.phase = "voting";
@@ -299,6 +512,10 @@ function endDiscussion(room: RoomRecord): void {
 function extendDiscussion(room: RoomRecord, seconds: number): void {
   if (!room.round || room.phase !== "discussion") {
     throw new AppError(409, "Discussion is not active.");
+  }
+
+  if (room.gameId !== "fact-or-fake") {
+    throw new AppError(409, "Discussion controls are only available in Fact or Fake.");
   }
 
   const safeSeconds = normalizeExtendSeconds(seconds);
@@ -351,7 +568,58 @@ function updateSettings(
   }
 }
 
+function swapCard(room: RoomRecord, sessionId: string): void {
+  if (room.gameId !== "fact-or-fake") {
+    throw new AppError(409, "Card swap is only available in Fact or Fake.");
+  }
+
+  if (!room.round || room.phase !== "discussion") {
+    throw new AppError(409, "Card swap is only available during discussion.");
+  }
+
+  const assignment = room.round.assignments[sessionId];
+
+  if (!assignment) {
+    throw new AppError(403, "You are not assigned in this round.");
+  }
+
+  const usedSwaps = room.round.swapsUsed[sessionId] ?? 0;
+
+  if (usedSwaps >= SWAP_LIMIT_PER_ROUND) {
+    throw new AppError(409, `Swap limit reached. Maximum ${SWAP_LIMIT_PER_ROUND} swaps per round.`);
+  }
+
+  const deck = getFactsForGame(room.gameId, room.settings.language);
+  const sourcePool = assignment.factKind === "fake" ? deck.fakeFacts : deck.realFacts;
+  const conflictKeys = collectConflictKeysFromAssignments(room.round.assignments, sessionId);
+  const compatiblePool = sourcePool.filter(
+    (fact) => !conflictsWithOppositeSide(fact, assignment.factKind, conflictKeys)
+  );
+  const assignedFactIds = new Set(Object.values(room.round.assignments).map((item) => item.factId));
+  const usedFactIds = new Set(room.round.usedFactIds);
+  const effectivePool = compatiblePool.filter((fact) => !assignedFactIds.has(fact.id) && !usedFactIds.has(fact.id));
+  const nextCard = shuffle(effectivePool)[0];
+
+  if (!nextCard) {
+    throw new AppError(409, "No additional cards are available for swap right now.");
+  }
+
+  assignment.card = nextCard.text;
+  assignment.factId = nextCard.id;
+  assignment.category = nextCard.category;
+  assignment.factKind = nextCard.kind;
+  assignment.factCorrection = nextCard.correction;
+  assignment.factMetadata = nextCard.metadata;
+  room.round.usedFactIds.push(nextCard.id);
+  room.round.swapsUsed[sessionId] = usedSwaps + 1;
+  markUpdated(room);
+}
+
 function castVote(room: RoomRecord, sessionId: string, targetPlayerId: string): void {
+  if (room.gameId !== "fact-or-fake") {
+    throw new AppError(409, "Use True/False answers in this game mode.");
+  }
+
   if (!room.round || room.phase !== "voting") {
     throw new AppError(409, "Voting is not active.");
   }
@@ -365,6 +633,25 @@ function castVote(room: RoomRecord, sessionId: string, targetPlayerId: string): 
   }
 
   room.round.votes[sessionId] = targetPlayerId;
+
+  if (haveAllPlayersVoted(room)) {
+    finalizeRound(room);
+    return;
+  }
+
+  markUpdated(room);
+}
+
+function answerTrueFalse(room: RoomRecord, sessionId: string, answer: TrueFalseAnswer): void {
+  if (room.gameId !== "true-or-false") {
+    throw new AppError(409, "True/False answers are only available in this game mode.");
+  }
+
+  if (!room.round || room.phase !== "voting") {
+    throw new AppError(409, "Answering is not active.");
+  }
+
+  room.round.votes[sessionId] = answer;
 
   if (haveAllPlayersVoted(room)) {
     finalizeRound(room);
@@ -391,7 +678,7 @@ function leaveRoom(room: RoomRecord, sessionId: string): "deleted" | "updated" {
     room.hostId = remainingPlayers[0].id;
   }
 
-  if (room.phase !== "lobby" && remainingPlayers.length < MIN_PLAYERS) {
+  if (room.phase !== "lobby" && remainingPlayers.length < minPlayersForRoom(room)) {
     room.phase = "lobby";
     room.round = null;
     markUpdated(room);
@@ -407,16 +694,18 @@ function leaveRoom(room: RoomRecord, sessionId: string): "deleted" | "updated" {
   return "updated";
 }
 
-function buildClosedRoomView(code: string): RoomView {
+function buildClosedRoomView(code: string, gameId: RoomRecord["gameId"] = "fact-or-fake"): RoomView {
+  const minPlayers = getGame(gameId)?.minPlayers ?? MIN_PLAYERS;
+
   return {
     joined: false,
     roomCode: code,
-    gameId: "fact-or-fake",
+    gameId,
     language: "en",
     version: 0,
     phase: "lobby",
     settings: { ...DEFAULT_SETTINGS },
-    minPlayers: MIN_PLAYERS,
+    minPlayers,
     players: [],
     hostId: null,
     meId: null,
@@ -430,6 +719,7 @@ function buildClosedRoomView(code: string): RoomView {
 export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
   const players = toSortedPlayers(room);
   const me = room.players[sessionId] ?? null;
+  const minPlayers = minPlayersForRoom(room);
 
   const publicPlayers = players.map((player) => ({
     id: player.id,
@@ -448,7 +738,7 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
       version: room.version,
       phase: room.phase,
       settings: room.settings,
-      minPlayers: MIN_PLAYERS,
+      minPlayers,
       players: publicPlayers,
       hostId: room.hostId,
       meId: null,
@@ -468,12 +758,21 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
     const assignment = room.round.assignments[sessionId] ?? null;
     const result = room.round.result;
 
-    round = {
+      round = {
       roundNumber: room.round.roundNumber,
       discussionEndsAt: room.phase === "discussion" ? room.round.discussionEndsAt : null,
       myCard: assignment?.card ?? null,
       myRole: assignment?.role ?? null,
+      mySwapsRemaining:
+        room.gameId === "fact-or-fake"
+          ? Math.max(0, SWAP_LIMIT_PER_ROUND - (room.round.swapsUsed[sessionId] ?? 0))
+          : 0,
       myVote: room.round.votes[sessionId] ?? null,
+      myAnswer:
+        room.gameId === "true-or-false" && (room.round.votes[sessionId] === "true" || room.round.votes[sessionId] === "false")
+          ? (room.round.votes[sessionId] as TrueFalseAnswer)
+          : null,
+      correctAnswer: room.phase === "results" ? result?.correctAnswer ?? null : null,
       imposters: room.phase === "results" ? result?.imposters ?? null : null,
       votes: room.phase === "results" ? result?.votes ?? null : null,
       voteCounts: room.phase === "results" ? result?.voteCounts ?? null : null,
@@ -482,10 +781,10 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
     };
   }
 
-  const hostControlsStart = room.hostId === sessionId && room.phase === "lobby" && players.length >= MIN_PLAYERS;
+  const hostControlsStart = room.hostId === sessionId && room.phase === "lobby" && players.length >= minPlayers;
   const message =
-    room.phase === "lobby" && players.length < MIN_PLAYERS
-      ? `At least ${MIN_PLAYERS} players are required to start.`
+    room.phase === "lobby" && players.length < minPlayers
+      ? `At least ${minPlayers} players are required to start.`
       : null;
 
   return {
@@ -496,7 +795,7 @@ export function buildRoomView(room: RoomRecord, sessionId: string): RoomView {
     version: room.version,
     phase: room.phase,
     settings: room.settings,
-    minPlayers: MIN_PLAYERS,
+    minPlayers,
     players: publicPlayers,
     hostId: room.hostId,
     meId: sessionId,
@@ -681,6 +980,13 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
       changed = changed || room.version !== previousVersion;
       break;
     }
+    case "answer_true_false": {
+      ensurePlayerInRoom(room, sessionId);
+      const previousVersion = room.version;
+      answerTrueFalse(room, sessionId, input.action.answer);
+      changed = changed || room.version !== previousVersion;
+      break;
+    }
     case "reveal_results": {
       requireHost(room, sessionId);
 
@@ -690,6 +996,13 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
 
       finalizeRound(room);
       changed = true;
+      break;
+    }
+    case "swap_card": {
+      ensurePlayerInRoom(room, sessionId);
+      const previousVersion = room.version;
+      swapCard(room, sessionId);
+      changed = changed || room.version !== previousVersion;
       break;
     }
     case "end_discussion": {
@@ -733,7 +1046,7 @@ export async function performAction(roomCode: string, input: ActionInput): Promi
 
       if (leaveState === "deleted") {
         await store.deleteRoom(room.code);
-        return buildClosedRoomView(room.code);
+        return buildClosedRoomView(room.code, room.gameId);
       }
 
       changed = true;

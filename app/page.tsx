@@ -22,6 +22,7 @@ const COPY = {
     players: "players",
     upTo: "Up to",
     imposters: "imposters",
+    solo: "Solo",
     facts: "Facts",
     comingSoon: "Soon",
     newSlot: "New Game Slot",
@@ -39,6 +40,7 @@ const COPY = {
     players: "игроков",
     upTo: "До",
     imposters: "импостеров",
+    solo: "Соло",
     facts: "Фактов",
     comingSoon: "Скоро",
     newSlot: "Слот для новой игры",
@@ -92,7 +94,7 @@ export default function HomePage() {
                     {copy.minPlayers} {game.minPlayers} {copy.players}
                   </span>
                   <span className="pill">
-                    {copy.upTo} {game.maxImposters} {copy.imposters}
+                    {game.supportsImposters ? `${copy.upTo} ${game.maxImposters} ${copy.imposters}` : copy.solo}
                   </span>
                   <span className="pill">
                     {copy.facts}: {game.factCount}
