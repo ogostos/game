@@ -24,6 +24,7 @@ const COPY = {
     imposters: "imposters",
     solo: "Solo",
     facts: "Facts",
+    tapToPlay: "Tap to play",
     comingSoon: "Soon",
     newSlot: "New Game Slot",
     newSlotText: "This slot is intentionally reserved for future game modes."
@@ -42,6 +43,7 @@ const COPY = {
     imposters: "импостеров",
     solo: "Соло",
     facts: "Фактов",
+    tapToPlay: "Нажмите, чтобы играть",
     comingSoon: "Скоро",
     newSlot: "Слот для новой игры",
     newSlotText: "Этот блок зарезервирован под следующие игровые режимы."
@@ -62,6 +64,7 @@ export default function HomePage() {
   }
 
   const copy = COPY[language];
+  const totalFacts = games.reduce((sum, game) => sum + game.factCount, 0);
 
   function cardToken(gameId: string) {
     if (gameId === "fact-or-fake") {
@@ -77,13 +80,29 @@ export default function HomePage() {
 
   return (
     <main className="shell stack-xl home-shell">
-      <section className="hero-panel fade-up stack-md party-hero">
+      <section className="hero-panel fade-up stack-md party-hero game-hero">
         <div className="row-wrap space-between">
           <p className="eyebrow">{copy.eyebrow}</p>
           <LanguageToggle language={language} onChange={updateLanguage} />
         </div>
-        <h1 className="title-xl">{copy.title}</h1>
-        <p className="hero-copy">{copy.subtitle}</p>
+        <div className="hero-main stack-sm">
+          <h1 className="title-xl">{copy.title}</h1>
+          <p className="hero-copy">{copy.subtitle}</p>
+        </div>
+        <div className="hero-stats">
+          <article className="hero-stat">
+            <p className="hero-stat-value">{games.length}</p>
+            <p className="hero-stat-label">{copy.availableGames}</p>
+          </article>
+          <article className="hero-stat">
+            <p className="hero-stat-value">{totalFacts}</p>
+            <p className="hero-stat-label">{copy.facts}</p>
+          </article>
+          <article className="hero-stat">
+            <p className="hero-stat-value">{copy.live}</p>
+            <p className="hero-stat-label">{copy.moreSoon}</p>
+          </article>
+        </div>
       </section>
 
       <section className="stack-md">
@@ -98,7 +117,7 @@ export default function HomePage() {
             const toneClass = game.id === "fact-or-fake" ? "tone-coral" : "tone-teal";
 
             return (
-              <Link key={game.id} href={`/games/${game.id}`} className={`game-card ${toneClass}`}>
+              <Link key={game.id} href={`/games/${game.id}`} className={`game-card game-card-shell ${toneClass}`}>
                 <div className="row-wrap space-between">
                   <p className="eyebrow">{copy.live}</p>
                   <span className="game-token">{cardToken(game.id)}</span>
@@ -116,11 +135,12 @@ export default function HomePage() {
                     {copy.facts}: {game.factCount}
                   </span>
                 </div>
+                <p className="card-cta">{copy.tapToPlay}</p>
               </Link>
             );
           })}
 
-          <article className="game-card pending tone-sky">
+          <article className="game-card game-card-shell pending tone-sky">
             <p className="eyebrow">{copy.comingSoon}</p>
             <h3 className="title-sm">{copy.newSlot}</h3>
             <p className="muted">{copy.newSlotText}</p>

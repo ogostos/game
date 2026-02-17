@@ -16,7 +16,7 @@ interface RoomClientProps {
 }
 
 const POLL_ERROR_RETRY_MS = 1200;
-const SOLO_TRUE_FALSE_NEXT_DELAY_MS = 4500;
+const SOLO_TRUE_FALSE_NEXT_DELAY_MS = 20_000;
 
 const COPY = {
   en: {
@@ -92,14 +92,18 @@ const COPY = {
     factsUnavailable: "Facts unavailable.",
     truth: "Truth",
     fake: "Fake",
+    points: "pts",
     roleImposter: "Imposter",
     roleTruth: "Truth",
     unknown: "Unknown",
     playAgain: "Next round",
+    nextNow: "Next now",
+    round: "Round",
     backToLobby: "Back to lobby",
     returning: "Returning...",
     waitingHostDecision: "Waiting for host to start the next round or return to lobby.",
     autoNextQuestion: "Next question is loading...",
+    autoNextIn: (seconds: number) => `Auto next in ${seconds}s`,
     enterNameError: "Display name is required.",
     syncFailed: "Unable to sync room state.",
     connectionLost: "Connection lost.",
@@ -181,14 +185,18 @@ const COPY = {
     factsUnavailable: "Список фактов недоступен.",
     truth: "Правда",
     fake: "Фейк",
+    points: "очк.",
     roleImposter: "Импостер",
     roleTruth: "Правда",
     unknown: "Неизвестно",
     playAgain: "Следующий раунд",
+    nextNow: "Сразу дальше",
+    round: "Раунд",
     backToLobby: "Вернуться в лобби",
     returning: "Возврат...",
     waitingHostDecision: "Ожидайте решения хоста: новый раунд или возврат в лобби.",
     autoNextQuestion: "Загружается следующий вопрос...",
+    autoNextIn: (seconds: number) => `Автопереход через ${seconds} сек.`,
     enterNameError: "Введите имя игрока.",
     syncFailed: "Не удалось синхронизировать состояние комнаты.",
     connectionLost: "Потеряно соединение.",
@@ -251,6 +259,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const [settingsLanguage, setSettingsLanguage] = useState<Language>("en");
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [soloAutoNextAt, setSoloAutoNextAt] = useState<number | null>(null);
   const versionRef = useRef(0);
   const autoNextTimeoutRef = useRef<number | null>(null);
   const autoNextRoundRef = useRef<number | null>(null);
@@ -443,12 +452,16 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const totalRoundFacts = roundRealFacts.length + roundFakeFacts.length;
 
   useEffect(() => {
-    if (!isSoloTrueFalse || phase !== "results" || !state?.round?.roundNumber) {
+    function clearSoloTimer() {
       if (autoNextTimeoutRef.current) {
         window.clearTimeout(autoNextTimeoutRef.current);
         autoNextTimeoutRef.current = null;
       }
+      setSoloAutoNextAt(null);
+    }
 
+    if (!isSoloTrueFalse || phase !== "results" || !state?.round?.roundNumber) {
+      clearSoloTimer();
       return;
     }
 
@@ -462,11 +475,20 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       window.clearTimeout(autoNextTimeoutRef.current);
     }
 
+    const triggerAt = Date.now() + SOLO_TRUE_FALSE_NEXT_DELAY_MS;
+    setSoloAutoNextAt(triggerAt);
+
     autoNextTimeoutRef.current = window.setTimeout(() => {
       autoNextTimeoutRef.current = null;
+      setSoloAutoNextAt(null);
       void sendAction({ type: "play_again" });
     }, SOLO_TRUE_FALSE_NEXT_DELAY_MS);
   }, [isSoloTrueFalse, phase, sendAction, state?.round?.roundNumber]);
+
+  const soloAutoNextSecondsLeft =
+    isSoloTrueFalse && soloAutoNextAt
+      ? Math.max(0, Math.ceil((soloAutoNextAt - now) / 1000))
+      : null;
 
   const playersById = useMemo(() => {
     if (!state) {
@@ -478,6 +500,15 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
   async function handleTrueFalseAnswer(answer: "true" | "false") {
     await sendAction({ type: "answer_true_false", answer });
+  }
+
+  async function handleSoloNextNow() {
+    if (autoNextTimeoutRef.current) {
+      window.clearTimeout(autoNextTimeoutRef.current);
+      autoNextTimeoutRef.current = null;
+    }
+    setSoloAutoNextAt(null);
+    await sendAction({ type: "play_again" });
   }
 
   if (!sessionId || (loading && !state)) {
@@ -573,7 +604,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   }
 
   return (
-    <div className={`stack-lg fade-up room-screen phase-${phase ?? "idle"}`}>
+    <div className={`stack-lg fade-up room-screen phase-${phase ?? "idle"} game-arena`}>
       <section className="panel stack-md room-header">
         <div className="row-wrap space-between">
           <div className="stack-xs">
@@ -584,9 +615,6 @@ export function RoomClient({ roomCode }: RoomClientProps) {
           </div>
           <div className="pill-row">
             <LanguageToggle language={uiLanguage} onChange={updateLanguage} />
-            <span className="pill">
-              {copy.phase}: {phase ? phaseText(uiLanguage, phase) : "-"}
-            </span>
             <button className="button-ghost" type="button" onClick={copyRoomLink}>
               {copied ? copy.linkCopied : copy.copyLink}
             </button>
@@ -594,6 +622,17 @@ export function RoomClient({ roomCode }: RoomClientProps) {
               {copy.leave}
             </button>
           </div>
+        </div>
+        <div className="hud-strip">
+          <span className="hud-chip">
+            {copy.round}: {state.round?.roundNumber ?? 0}
+          </span>
+          <span className="hud-chip">
+            {copy.players}: {state.players.length}
+          </span>
+          <span className="hud-chip">
+            {copy.phase}: {phase ? phaseText(uiLanguage, phase) : "-"}
+          </span>
         </div>
 
         {phase === "lobby" && state.players.length < state.minPlayers ? (
@@ -612,9 +651,12 @@ export function RoomClient({ roomCode }: RoomClientProps) {
         <div className="player-grid">
           {state.players.map((player) => (
             <article key={player.id} className="player-card">
-              <div className="row-wrap space-between">
-                <p>{player.displayName}</p>
-                <span className="muted">{player.score} pts</span>
+              <div className="player-row">
+                <span className="player-avatar">{player.displayName.slice(0, 1).toUpperCase()}</span>
+                <p className="player-name">{player.displayName}</p>
+                <span className="score-pill">
+                  {player.score} {copy.points}
+                </span>
               </div>
               <div className="pill-row">
                 {player.isHost ? <span className="pill">{copy.host}</span> : null}
@@ -795,7 +837,11 @@ export function RoomClient({ roomCode }: RoomClientProps) {
 
               <div className="vote-grid">
                 <button
-                  className={state.round?.myAnswer === "true" ? "vote-option active" : "vote-option"}
+                  className={
+                    state.round?.myAnswer === "true"
+                      ? "vote-option answer-choice truth-choice active"
+                      : "vote-option answer-choice truth-choice"
+                  }
                   type="button"
                   onClick={() => handleTrueFalseAnswer("true")}
                   disabled={workingAction === "answer_true_false"}
@@ -803,7 +849,11 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                   {copy.answerTrue}
                 </button>
                 <button
-                  className={state.round?.myAnswer === "false" ? "vote-option active" : "vote-option"}
+                  className={
+                    state.round?.myAnswer === "false"
+                      ? "vote-option answer-choice fake-choice active"
+                      : "vote-option answer-choice fake-choice"
+                  }
                   type="button"
                   onClick={() => handleTrueFalseAnswer("false")}
                   disabled={workingAction === "answer_true_false"}
@@ -1015,7 +1065,19 @@ export function RoomClient({ roomCode }: RoomClientProps) {
               </button>
             </div>
           ) : isSoloTrueFalse ? (
-            <p className="muted">{copy.autoNextQuestion}</p>
+            <div className="button-row">
+              <button
+                className="button-primary"
+                type="button"
+                onClick={handleSoloNextNow}
+                disabled={workingAction === "play_again"}
+              >
+                {workingAction === "play_again" ? copy.starting : copy.nextNow}
+              </button>
+              <p className="muted">
+                {soloAutoNextSecondsLeft !== null ? copy.autoNextIn(soloAutoNextSecondsLeft) : copy.autoNextQuestion}
+              </p>
+            </div>
           ) : (
             <p className="muted">{copy.waitingHostDecision}</p>
           )}

@@ -18,12 +18,14 @@ interface GameEntryClientProps {
 const COPY = {
   en: {
     modeLabel: "Game Mode",
+    setupLabel: "Game Setup",
     totalFacts: "Total facts",
     quickSoloTitle: "Solo",
     quickSoloHint: "Start instantly without manual room setup.",
     playSoloNow: "Play Solo Now",
     startingSolo: "Starting solo...",
     multiplayerOptional: "Multiplayer (optional)",
+    roomMode: "Room Mode",
     createRoom: "Create Room",
     joinRoom: "Join Room",
     displayName: "Display name",
@@ -50,12 +52,14 @@ const COPY = {
   },
   ru: {
     modeLabel: "Режим игры",
+    setupLabel: "Настройка игры",
     totalFacts: "Всего фактов",
     quickSoloTitle: "Соло",
     quickSoloHint: "Мгновенный старт без ручного создания комнаты.",
     playSoloNow: "Играть соло",
     startingSolo: "Запуск соло...",
     multiplayerOptional: "Мультиплеер (необязательно)",
+    roomMode: "Режим комнаты",
     createRoom: "Создать комнату",
     joinRoom: "Войти в комнату",
     displayName: "Имя игрока",
@@ -203,21 +207,26 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
 
   return (
     <div className="panel stack-lg entry-panel">
-      <div className="row-wrap space-between">
-        <p className="eyebrow">{copy.modeLabel}</p>
-        <LanguageToggle language={language} onChange={updateLanguage} />
-      </div>
+      <section className="entry-hero stack-sm">
+        <div className="row-wrap space-between">
+          <p className="eyebrow">{copy.modeLabel}</p>
+          <LanguageToggle language={language} onChange={updateLanguage} />
+        </div>
 
-      <div className="stack-sm">
         <h1 className="title-lg">{localizedGame.title}</h1>
         <p className="muted">{localizedGame.description}</p>
-        <p className="muted">
-          {copy.totalFacts}: {game.factCount}
-        </p>
-      </div>
+        <div className="entry-badges">
+          <span className="entry-badge">
+            {copy.totalFacts}: {game.factCount}
+          </span>
+          <span className="entry-badge">
+            {copy.minPlayers}: {game.minPlayers}
+          </span>
+        </div>
+      </section>
 
       {isTrueOrFalse ? (
-        <section className="card-panel stack-md solo-panel">
+        <section className="card-panel stack-md solo-panel entry-solo">
           <p className="eyebrow">{copy.quickSoloTitle}</p>
           <p className="muted">{copy.quickSoloHint}</p>
 
@@ -240,122 +249,126 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
         </section>
       ) : null}
 
-      <div className="segmented-control" role="tablist" aria-label="Room entry mode">
-        <button
-          type="button"
-          className={mode === "create" ? "segmented-active" : "segmented-button"}
-          onClick={() => setMode("create")}
-        >
-          {copy.createRoom}
-        </button>
-        <button
-          type="button"
-          className={mode === "join" ? "segmented-active" : "segmented-button"}
-          onClick={() => setMode("join")}
-        >
-          {copy.joinRoom}
-        </button>
-      </div>
+      <section className="entry-room stack-md">
+        <div className="row-wrap space-between">
+          <p className="eyebrow">{copy.roomMode}</p>
+          {isTrueOrFalse ? <p className="muted">{copy.multiplayerOptional}</p> : null}
+        </div>
 
-      {isTrueOrFalse ? <p className="muted">{copy.multiplayerOptional}</p> : null}
-
-      {mode === "create" ? (
-        <form className="stack-md entry-form" onSubmit={handleCreate}>
-          <label className="input-label" htmlFor="create-name">
-            {copy.displayName}
-          </label>
-          <input
-            id="create-name"
-            className="text-input"
-            value={createName}
-            onChange={(event) => setCreateName(event.target.value)}
-            placeholder={copy.yourName}
-            maxLength={24}
-            autoComplete="nickname"
-          />
-
-          <label className="input-label" htmlFor="create-password">
-            {copy.passwordOptional}
-          </label>
-          <input
-            id="create-password"
-            className="text-input"
-            value={createPassword}
-            onChange={(event) => setCreatePassword(event.target.value)}
-            placeholder={copy.emptyRoomPassword}
-            autoComplete="off"
-          />
-
-          <label className="input-label" htmlFor="room-language">
-            {copy.roomLanguage}
-          </label>
-          <select
-            id="room-language"
-            className="text-input"
-            value={roomLanguage}
-            onChange={(event) => setRoomLanguage(event.target.value as Language)}
+        <div className="segmented-control" role="tablist" aria-label="Room entry mode">
+          <button
+            type="button"
+            className={mode === "create" ? "segmented-active" : "segmented-button"}
+            onClick={() => setMode("create")}
           >
-            <option value="en">{copy.english}</option>
-            <option value="ru">{copy.russian}</option>
-          </select>
-
-          <button className="button-primary" type="submit" disabled={pending}>
-            {pending ? copy.creating : copy.createAction}
+            {copy.createRoom}
           </button>
-        </form>
-      ) : (
-        <form className="stack-md entry-form" onSubmit={handleJoin}>
-          <label className="input-label" htmlFor="join-room-code">
-            {copy.roomCode}
-          </label>
-          <input
-            id="join-room-code"
-            className="text-input"
-            value={joinCode}
-            onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-            placeholder="ABCDE"
-            maxLength={5}
-            autoCapitalize="characters"
-            autoComplete="off"
-          />
-
-          <label className="input-label" htmlFor="join-name">
-            {copy.displayName}
-          </label>
-          <input
-            id="join-name"
-            className="text-input"
-            value={joinName}
-            onChange={(event) => setJoinName(event.target.value)}
-            placeholder={copy.yourName}
-            maxLength={24}
-            autoComplete="nickname"
-          />
-
-          <label className="input-label" htmlFor="join-password">
-            {copy.passwordIfRequired}
-          </label>
-          <input
-            id="join-password"
-            className="text-input"
-            value={joinPassword}
-            onChange={(event) => setJoinPassword(event.target.value)}
-            placeholder={copy.roomPassword}
-            autoComplete="off"
-          />
-
-          <button className="button-primary" type="submit" disabled={pending}>
-            {pending ? copy.joining : copy.joinAction}
+          <button
+            type="button"
+            className={mode === "join" ? "segmented-active" : "segmented-button"}
+            onClick={() => setMode("join")}
+          >
+            {copy.joinRoom}
           </button>
-        </form>
-      )}
+        </div>
+
+        {mode === "create" ? (
+          <form className="stack-md entry-form" onSubmit={handleCreate}>
+            <p className="eyebrow">{copy.setupLabel}</p>
+            <label className="input-label" htmlFor="create-name">
+              {copy.displayName}
+            </label>
+            <input
+              id="create-name"
+              className="text-input"
+              value={createName}
+              onChange={(event) => setCreateName(event.target.value)}
+              placeholder={copy.yourName}
+              maxLength={24}
+              autoComplete="nickname"
+            />
+
+            <label className="input-label" htmlFor="create-password">
+              {copy.passwordOptional}
+            </label>
+            <input
+              id="create-password"
+              className="text-input"
+              value={createPassword}
+              onChange={(event) => setCreatePassword(event.target.value)}
+              placeholder={copy.emptyRoomPassword}
+              autoComplete="off"
+            />
+
+            <label className="input-label" htmlFor="room-language">
+              {copy.roomLanguage}
+            </label>
+            <select
+              id="room-language"
+              className="text-input"
+              value={roomLanguage}
+              onChange={(event) => setRoomLanguage(event.target.value as Language)}
+            >
+              <option value="en">{copy.english}</option>
+              <option value="ru">{copy.russian}</option>
+            </select>
+
+            <button className="button-primary" type="submit" disabled={pending}>
+              {pending ? copy.creating : copy.createAction}
+            </button>
+          </form>
+        ) : (
+          <form className="stack-md entry-form" onSubmit={handleJoin}>
+            <p className="eyebrow">{copy.setupLabel}</p>
+            <label className="input-label" htmlFor="join-room-code">
+              {copy.roomCode}
+            </label>
+            <input
+              id="join-room-code"
+              className="text-input"
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+              placeholder="ABCDE"
+              maxLength={5}
+              autoCapitalize="characters"
+              autoComplete="off"
+            />
+
+            <label className="input-label" htmlFor="join-name">
+              {copy.displayName}
+            </label>
+            <input
+              id="join-name"
+              className="text-input"
+              value={joinName}
+              onChange={(event) => setJoinName(event.target.value)}
+              placeholder={copy.yourName}
+              maxLength={24}
+              autoComplete="nickname"
+            />
+
+            <label className="input-label" htmlFor="join-password">
+              {copy.passwordIfRequired}
+            </label>
+            <input
+              id="join-password"
+              className="text-input"
+              value={joinPassword}
+              onChange={(event) => setJoinPassword(event.target.value)}
+              placeholder={copy.roomPassword}
+              autoComplete="off"
+            />
+
+            <button className="button-primary" type="submit" disabled={pending}>
+              {pending ? copy.joining : copy.joinAction}
+            </button>
+          </form>
+        )}
+      </section>
 
       {error ? <p className="error-text">{error}</p> : null}
 
       <div className="stack-sm">
-        <p className="muted">
-          {copy.minPlayers}: {game.minPlayers}
-        </p>
         <Link href="/" className="text-link">
           {copy.backToGames}
         </Link>
