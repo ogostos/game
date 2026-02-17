@@ -539,6 +539,12 @@ const UNSAFE_CONTENT_PATTERN_RU =
 const AWKWARD_PUNCTUATION_PATTERN = /(,\.)|(\.{2,})|(\s{2,})|(\(\s*\))/;
 const UNWANTED_IMPORT_PREFIX_PATTERN =
   /^(A verified fact states that|Historical sources report that|Reliable references show that)\b/i;
+const BIBLIOGRAPHIC_ID_PATTERN = /-book-author-/i;
+const EXTRACT_NOISE_PATTERN_EN =
+  /(course of theoretical physics|there is a record in the bristol calendar|despite what you may have seen in bad sci-fi films|was written by)/i;
+const EXTRACT_NOISE_PATTERN_RU =
+  /(курс теоретической физики|в бристольском календаре|несмотря на то, что вы, возможно, видели в плохих научно-фантастических фильмах|написал\(а\))/i;
+const EXTRACT_REFERENCE_PATTERN = /(\[[^\]]{1,40}\])|(…)/;
 
 function normalizeFactText(text: string): string {
   return text
@@ -580,6 +586,17 @@ function passesEditorialTextFilter(text: string, language: Language): boolean {
   }
 
   if (AWKWARD_PUNCTUATION_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (
+    (language === "en" && EXTRACT_NOISE_PATTERN_EN.test(trimmed)) ||
+    (language === "ru" && EXTRACT_NOISE_PATTERN_RU.test(trimmed))
+  ) {
+    return false;
+  }
+
+  if (EXTRACT_REFERENCE_PATTERN.test(trimmed)) {
     return false;
   }
 
@@ -777,6 +794,10 @@ function toImportedFacts(value: unknown, kind: FactKind): FactSource[] {
 
 function isPublishableFactSource(fact: FactSource): boolean {
   if (!fact.id.trim()) {
+    return false;
+  }
+
+  if (BIBLIOGRAPHIC_ID_PATTERN.test(fact.id)) {
     return false;
   }
 

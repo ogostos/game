@@ -16,7 +16,7 @@ interface RoomClientProps {
 }
 
 const POLL_ERROR_RETRY_MS = 1200;
-const SOLO_TRUE_FALSE_NEXT_DELAY_MS = 1200;
+const SOLO_TRUE_FALSE_NEXT_DELAY_MS = 4500;
 
 const COPY = {
   en: {
