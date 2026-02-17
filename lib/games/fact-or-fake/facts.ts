@@ -545,6 +545,13 @@ const EXTRACT_NOISE_PATTERN_EN =
 const EXTRACT_NOISE_PATTERN_RU =
   /(курс теоретической физики|в бристольском календаре|несмотря на то, что вы, возможно, видели в плохих научно-фантастических фильмах|написал\(а\))/i;
 const EXTRACT_REFERENCE_PATTERN = /(\[[^\]]{1,40}\])|(…)/;
+const CONTEXT_FRAGMENT_START_PATTERN_EN =
+  /^(after this|after that|following this|the name refers to|this name refers to|this term refers to|the term refers to|this refers to|that refers to)\b/i;
+const CONTEXT_FRAGMENT_START_PATTERN_RU =
+  /^(после этого|после того|впоследствии|это имя относится|это название относится|это термин относится|это относится к тому|это относится к)(\s|,|\.|:)/i;
+const CONTEXT_FRAGMENT_ANYWHERE_PATTERN_EN = /\bin the aftermath\b/i;
+const CONTEXT_FRAGMENT_ANYWHERE_PATTERN_RU = /после этого/i;
+const CONTEXT_FRAGMENT_QUOTE_PATTERN = /("chucks"|«кидает»)/i;
 
 function normalizeFactText(text: string): string {
   return text
@@ -597,6 +604,19 @@ function passesEditorialTextFilter(text: string, language: Language): boolean {
   }
 
   if (EXTRACT_REFERENCE_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  if (
+    (language === "en" &&
+      (CONTEXT_FRAGMENT_START_PATTERN_EN.test(trimmed) || CONTEXT_FRAGMENT_ANYWHERE_PATTERN_EN.test(trimmed))) ||
+    (language === "ru" &&
+      (CONTEXT_FRAGMENT_START_PATTERN_RU.test(trimmed) || CONTEXT_FRAGMENT_ANYWHERE_PATTERN_RU.test(trimmed)))
+  ) {
+    return false;
+  }
+
+  if (CONTEXT_FRAGMENT_QUOTE_PATTERN.test(trimmed)) {
     return false;
   }
 
