@@ -202,7 +202,7 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
   const localizedGame = gameText(game.id, language);
 
   return (
-    <div className="panel stack-lg">
+    <div className="panel stack-lg entry-panel">
       <div className="row-wrap space-between">
         <p className="eyebrow">{copy.modeLabel}</p>
         <LanguageToggle language={language} onChange={updateLanguage} />
@@ -217,7 +217,7 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
       </div>
 
       {isTrueOrFalse ? (
-        <section className="card-panel stack-md">
+        <section className="card-panel stack-md solo-panel">
           <p className="eyebrow">{copy.quickSoloTitle}</p>
           <p className="muted">{copy.quickSoloHint}</p>
 
@@ -260,7 +260,7 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
       {isTrueOrFalse ? <p className="muted">{copy.multiplayerOptional}</p> : null}
 
       {mode === "create" ? (
-        <form className="stack-md" onSubmit={handleCreate}>
+        <form className="stack-md entry-form" onSubmit={handleCreate}>
           <label className="input-label" htmlFor="create-name">
             {copy.displayName}
           </label>
@@ -304,7 +304,7 @@ export function GameEntryClient({ game }: GameEntryClientProps) {
           </button>
         </form>
       ) : (
-        <form className="stack-md" onSubmit={handleJoin}>
+        <form className="stack-md entry-form" onSubmit={handleJoin}>
           <label className="input-label" htmlFor="join-room-code">
             {copy.roomCode}
           </label>

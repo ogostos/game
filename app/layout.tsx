@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Manrope, Sora } from "next/font/google";
+import { Nunito, Rubik } from "next/font/google";
 
 import "@/app/globals.css";
 
-const displayFont = Sora({
-  subsets: ["latin"],
+const displayFont = Rubik({
+  subsets: ["latin", "cyrillic"],
   variable: "--font-display",
-  weight: ["600", "700"]
+  weight: ["600", "700", "800"]
 });
 
-const bodyFont = Manrope({
-  subsets: ["latin"],
+const bodyFont = Nunito({
+  subsets: ["latin", "cyrillic"],
   variable: "--font-body",
-  weight: ["400", "500", "600", "700"]
+  weight: ["400", "500", "600", "700", "800"]
 });
 
 export const metadata: Metadata = {

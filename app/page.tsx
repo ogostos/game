@@ -63,9 +63,21 @@ export default function HomePage() {
 
   const copy = COPY[language];
 
+  function cardToken(gameId: string) {
+    if (gameId === "fact-or-fake") {
+      return "F/F";
+    }
+
+    if (gameId === "true-or-false") {
+      return "T/F";
+    }
+
+    return "NEW";
+  }
+
   return (
-    <main className="shell stack-xl">
-      <section className="hero-panel fade-up stack-md">
+    <main className="shell stack-xl home-shell">
+      <section className="hero-panel fade-up stack-md party-hero">
         <div className="row-wrap space-between">
           <p className="eyebrow">{copy.eyebrow}</p>
           <LanguageToggle language={language} onChange={updateLanguage} />
@@ -83,10 +95,14 @@ export default function HomePage() {
         <div className="game-grid">
           {games.map((game) => {
             const gameCopy = gameText(game.id, language);
+            const toneClass = game.id === "fact-or-fake" ? "tone-coral" : "tone-teal";
 
             return (
-              <Link key={game.id} href={`/games/${game.id}`} className="game-card">
-                <p className="eyebrow">{copy.live}</p>
+              <Link key={game.id} href={`/games/${game.id}`} className={`game-card ${toneClass}`}>
+                <div className="row-wrap space-between">
+                  <p className="eyebrow">{copy.live}</p>
+                  <span className="game-token">{cardToken(game.id)}</span>
+                </div>
                 <h3 className="title-sm">{gameCopy.title}</h3>
                 <p className="muted">{gameCopy.description}</p>
                 <div className="pill-row">
@@ -104,7 +120,7 @@ export default function HomePage() {
             );
           })}
 
-          <article className="game-card pending">
+          <article className="game-card pending tone-sky">
             <p className="eyebrow">{copy.comingSoon}</p>
             <h3 className="title-sm">{copy.newSlot}</h3>
             <p className="muted">{copy.newSlotText}</p>

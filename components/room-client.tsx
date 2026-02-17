@@ -573,8 +573,8 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   }
 
   return (
-    <div className="stack-lg fade-up">
-      <section className="panel stack-md">
+    <div className={`stack-lg fade-up room-screen phase-${phase ?? "idle"}`}>
+      <section className="panel stack-md room-header">
         <div className="row-wrap space-between">
           <div className="stack-xs">
             <p className="eyebrow">
@@ -602,7 +602,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
         {error ? <p className="error-text">{error}</p> : null}
       </section>
 
-      <section className="panel stack-md">
+      <section className="panel stack-md roster-panel">
         <div className="row-wrap space-between">
           <h2 className="title-sm">{copy.players}</h2>
           <span className="muted">
@@ -627,7 +627,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       </section>
 
       {phase === "lobby" ? (
-        <section className="panel stack-md slide-up">
+        <section className="panel stack-md slide-up lobby-panel">
           <h2 className="title-sm">{copy.lobby}</h2>
 
           {isHost ? (
@@ -715,7 +715,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       ) : null}
 
       {phase === "discussion" ? (
-        <section className="panel stack-md slide-up">
+        <section className="panel stack-md slide-up discussion-panel">
           <div className="row-wrap space-between">
             <h2 className="title-sm">{copy.discussion}</h2>
             <p className="timer">{formatCountdown(discussionSecondsLeft)}</p>
@@ -783,7 +783,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       ) : null}
 
       {phase === "voting" ? (
-        <section className="panel stack-md slide-up">
+        <section className="panel stack-md slide-up voting-panel">
           {isTrueOrFalse ? (
             <>
               <h2 className="title-sm">{copy.trueFalseTitle}</h2>
@@ -887,7 +887,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
       ) : null}
 
       {phase === "results" ? (
-        <section className="panel stack-md slide-up">
+        <section className="panel stack-md slide-up results-panel">
           <h2 className="title-sm">{copy.results}</h2>
 
           {isTrueOrFalse ? (
