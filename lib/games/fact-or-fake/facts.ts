@@ -1,4 +1,5 @@
 import curatedFactsSource from "@/data/facts/fact-or-fake.curated.json";
+import epubFakesSource from "@/data/facts/fact-or-fake.epub-fakes.json";
 import type {
   FactCard,
   FactCardMetadata,
@@ -18,6 +19,7 @@ interface BilingualFactPair {
   category: BilingualText;
   realFact: BilingualText;
   fakeFact: BilingualText;
+  fakeCorrection?: BilingualText;
 }
 
 interface PairMetadata {
@@ -30,6 +32,7 @@ interface CuratedFactSource {
   id: string;
   category: BilingualText;
   text: BilingualText;
+  correction?: BilingualText;
 }
 
 interface CuratedFactsPayload {
@@ -41,6 +44,7 @@ interface FactSource {
   id: string;
   category: BilingualText;
   text: BilingualText;
+  correction?: BilingualText;
   kind: FactKind;
   metadata: FactCardMetadata;
 }
@@ -528,28 +532,13 @@ const CURATED_PAIR_METADATA: Record<string, PairMetadata> = {
   }
 };
 
-const SAFE_BORING_PATTERN =
-  /\b(capital of|currency of|flows into|is in\b|is located in|located in the country|official language of|is a city in|is a country in)\b/i;
-const SAFE_BORING_PATTERN_RU =
-  /(столиц[аы]\s|валют[аы]\s|впадает\sв|находится\sв|официальн(ый|ого)\sязык|является\sгородом\sв|является\sстраной\sв)/i;
 const UNSAFE_CONTENT_PATTERN =
-  /\b(sex|sexual|penis|vagina|orgasm|porn|genitals|fetish|explicit|orgy|rape|suicide|self-harm|gore|kill yourself|terroris(?:m|t)|nazi|racis(?:m|t)|extremis(?:m|t))\b/i;
+  /\b(sex|sexual|penis|vagina|orgasm|porn|genitals|fetish|explicit|orgy|rape|suicide|self-harm|gore|kill yourself|kill|killed|murder|murdered|bomb|gun|hitler|terror|terroris(?:m|t)|nazi|racis(?:m|t)|extremis(?:m|t))\b/i;
 const UNSAFE_CONTENT_PATTERN_RU =
-  /(секс|сексуал|пенис|вагин|оргазм|порно|генитал|фетиш|изнасил|суицид|самоубийств|самоповрежд|террор|наци|расист|экстремист)/i;
+  /(секс|сексуал|пенис|вагин|оргазм|порно|генитал|фетиш|изнасил|суицид|самоубийств|самоповрежд|убийств|убил|бомб|оруж|гитлер|террор|наци|расист|экстремист)/i;
 const AWKWARD_PUNCTUATION_PATTERN = /(,\.)|(\.{2,})|(\s{2,})|(\(\s*\))/;
-const LOW_SIGNAL_PATTERN = /\b(is in|is located in|is the capital of|the currency of)\b/i;
-const LOW_SIGNAL_PATTERN_RU =
-  /(находится\sв|является\sстолиц[аы]|является\sгородом\sв|валют[аы]\sстраны|официальн(ый|ого)\sязык)/i;
 const UNWANTED_IMPORT_PREFIX_PATTERN =
   /^(A verified fact states that|Historical sources report that|Reliable references show that)\b/i;
-const TRAILING_PUNCTUATION_PATTERN = /[,;:]\.?$/;
-const EXTRACTION_ARTIFACT_PATTERN =
-  /(^\W*so we are told\b)|(\b[a-d]\s*\))|(\b[a-d]\)\b)|(\bno eyes\b)|(\bq\s*[:\-])/i;
-const BORING_EDITORIAL_PATTERN =
-  /\b(was published in|published under|was first officially used|was devised in|according to|historian|biography|journal|court entertainment|international meteorological conference|latin vulgate)\b/i;
-const INTERESTING_TOPIC_PATTERN =
-  /\b(geography|climate|weather|temperature|storm|ocean|sea|river|mountain|island|world|global|planet|earth|culture|food|music|art|science|technology|internet|digital|president|prime minister|election|city|country|population|record|space|animal)\b|\d/i;
-const OLD_YEAR_PATTERN = /\b(1[0-8][0-9]{2}|19[0-4][0-9])\b/i;
 
 function normalizeFactText(text: string): string {
   return text
@@ -575,40 +564,14 @@ function uniqueTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => normalizeTag(tag)).filter(Boolean))];
 }
 
-function textWordCount(text: string): number {
-  return text
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
-
 function hasNonEmptyBilingual(value: BilingualText): boolean {
   return value.en.trim().length > 0 && value.ru.trim().length > 0;
-}
-
-function isInterestingStatement(text: string, language: Language): boolean {
-  const normalized = normalizeFactText(text);
-  const words = textWordCount(normalized);
-
-  if (words < 4 || words > 34) {
-    return false;
-  }
-
-  if (language === "ru" ? LOW_SIGNAL_PATTERN_RU.test(normalized) : LOW_SIGNAL_PATTERN.test(normalized)) {
-    return false;
-  }
-
-  if (language === "en" && !INTERESTING_TOPIC_PATTERN.test(normalized)) {
-    return false;
-  }
-
-  return true;
 }
 
 function passesEditorialTextFilter(text: string, language: Language): boolean {
   const trimmed = normalizeFactText(text);
 
-  if (trimmed.length < 12 || trimmed.length > 220) {
+  if (trimmed.length < (language === "ru" ? 10 : 12) || trimmed.length > (language === "ru" ? 260 : 220)) {
     return false;
   }
 
@@ -617,26 +580,6 @@ function passesEditorialTextFilter(text: string, language: Language): boolean {
   }
 
   if (AWKWARD_PUNCTUATION_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (TRAILING_PUNCTUATION_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (EXTRACTION_ARTIFACT_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (BORING_EDITORIAL_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (language === "ru" ? SAFE_BORING_PATTERN_RU.test(trimmed) : SAFE_BORING_PATTERN.test(trimmed)) {
-    return false;
-  }
-
-  if (!isInterestingStatement(trimmed, language)) {
     return false;
   }
 
@@ -667,6 +610,10 @@ function sourceTypeForImported(id: string): FactCardMetadata["sourceType"] {
     return "wikidata";
   }
 
+  if (id.startsWith("opentdb-") || id.startsWith("opentriviaqa-") || id.startsWith("drive_xlsx-")) {
+    return "reference_site";
+  }
+
   if (id.startsWith("epub-")) {
     return "book_extract";
   }
@@ -682,10 +629,59 @@ function sourceForImported(id: string): FactSourceReference {
     };
   }
 
+  if (id.startsWith("epub-gi-")) {
+    return {
+      name: "The Book of General Ignorance",
+      url: "https://en.wikipedia.org/wiki/The_Book_of_General_Ignorance"
+    };
+  }
+
+  if (id.startsWith("epub-wpbt-")) {
+    return {
+      name: "Why People Believe Weird Things",
+      url: "https://en.wikipedia.org/wiki/Why_People_Believe_Weird_Things"
+    };
+  }
+
+  if (id.startsWith("epub-sgu-")) {
+    return {
+      name: "The Skeptics' Guide to the Universe",
+      url: "https://en.wikipedia.org/wiki/The_Skeptics%27_Guide_to_the_Universe"
+    };
+  }
+
+  if (id.startsWith("epub-dfdw-")) {
+    return {
+      name: "Do Fish Drink Water?",
+      url: "https://www.goodreads.com/book/show/16067568-do-fish-drink-water"
+    };
+  }
+
   if (id.startsWith("epub-")) {
     return {
-      name: "The Book of General Ignorance (EPUB extract)",
-      url: "https://en.wikipedia.org/wiki/The_Book_of_General_Ignorance"
+      name: "Curated EPUB Extract",
+      url: "https://github.com/ogostos/game"
+    };
+  }
+
+  if (id.startsWith("opentdb-")) {
+    return {
+      name: "Open Trivia Database",
+      url: "https://opentdb.com/"
+    };
+  }
+
+  if (id.startsWith("opentriviaqa-")) {
+    return {
+      name: "OpenTriviaQA",
+      url: "https://github.com/uberspot/OpenTriviaQA"
+    };
+  }
+
+  if (id.startsWith("drive_xlsx-")) {
+    return {
+      name: "Google Drive Trivia Workbook",
+      url: "https://drive.google.com/file/d/0Bzs-xvR-5hQ3SGdxNXpWVHFNWG8/view"
     };
   }
 
@@ -729,6 +725,7 @@ function toImportedFacts(value: unknown, kind: FactKind): FactSource[] {
     const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
     const category = candidate.category;
     const text = candidate.text;
+    const correction = candidate.correction;
 
     if (
       !id ||
@@ -738,6 +735,17 @@ function toImportedFacts(value: unknown, kind: FactKind): FactSource[] {
       typeof category.ru !== "string" ||
       typeof text.en !== "string" ||
       typeof text.ru !== "string"
+    ) {
+      continue;
+    }
+
+    if (
+      kind === "fake" &&
+      (!correction ||
+        typeof correction.en !== "string" ||
+        typeof correction.ru !== "string" ||
+        !correction.en.trim() ||
+        !correction.ru.trim())
     ) {
       continue;
     }
@@ -752,6 +760,13 @@ function toImportedFacts(value: unknown, kind: FactKind): FactSource[] {
         en: text.en,
         ru: text.ru
       },
+      correction:
+        kind === "fake" && correction
+          ? {
+              en: correction.en,
+              ru: correction.ru
+            }
+          : undefined,
       kind,
       metadata: metadataForImported(id, kind, category)
     });
@@ -781,18 +796,25 @@ function isPublishableFactSource(fact: FactSource): boolean {
     return false;
   }
 
-  const lowerCategory = fact.category.en.toLowerCase();
-
-  if (lowerCategory.includes("history") || lowerCategory.includes("cinema") || lowerCategory.includes("language")) {
-    return false;
-  }
-
-  if (OLD_YEAR_PATTERN.test(normalizeFactText(fact.text.en))) {
-    return false;
-  }
-
   if (!passesEditorialTextFilter(fact.text.en, "en") || !passesEditorialTextFilter(fact.text.ru, "ru")) {
     return false;
+  }
+
+  if (fact.kind === "fake") {
+    if (!fact.correction || !hasNonEmptyBilingual(fact.correction)) {
+      return false;
+    }
+
+    if (!hasCyrillic(fact.correction.ru)) {
+      return false;
+    }
+
+    if (
+      !passesEditorialTextFilter(fact.correction.en, "en") ||
+      !passesEditorialTextFilter(fact.correction.ru, "ru")
+    ) {
+      return false;
+    }
   }
 
   return true;
@@ -808,6 +830,7 @@ function toFactCard(fact: FactSource, language: Language): FactCard {
     category: localizeText(fact.category, language),
     text: localizeText(fact.text, language),
     kind: fact.kind,
+    correction: fact.correction ? localizeText(fact.correction, language) : null,
     metadata: fact.metadata
   };
 }
@@ -833,20 +856,15 @@ const curatedRealFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
   metadata: metadataForCurated(fact.id, "real", fact.category)
 })).filter(isPublishableFactSource);
 
-const curatedFakeFacts: FactSource[] = FACT_OR_FAKE_SOURCE.map((fact) => ({
-  id: `${fact.id}-fake`,
-  category: fact.category,
-  text: fact.fakeFact,
-  kind: "fake" as FactKind,
-  metadata: metadataForCurated(fact.id, "fake", fact.category)
-})).filter(isPublishableFactSource);
-
 const importedFacts = curatedFactsSource as CuratedFactsPayload;
+const extractedEpubFakes = epubFakesSource as CuratedFactsPayload;
 const importedRealFacts = toImportedFacts(importedFacts.realFacts, "real").filter(isPublishableFactSource);
-const importedFakeFacts = toImportedFacts(importedFacts.fakeFacts, "fake").filter(isPublishableFactSource);
+const extractedEpubFakeFacts = toImportedFacts(extractedEpubFakes.fakeFacts, "fake").filter(
+  isPublishableFactSource
+);
 
 const REAL_FACT_SOURCE = dedupeById([...curatedRealFacts, ...importedRealFacts]);
-const FAKE_FACT_SOURCE = dedupeById([...curatedFakeFacts, ...importedFakeFacts]);
+const FAKE_FACT_SOURCE = dedupeById([...extractedEpubFakeFacts]);
 
 export const FACT_OR_FAKE_REAL_FACT_COUNT = REAL_FACT_SOURCE.length;
 export const FACT_OR_FAKE_FAKE_FACT_COUNT = FAKE_FACT_SOURCE.length;
