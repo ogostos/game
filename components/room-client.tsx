@@ -252,6 +252,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(Date.now());
   const versionRef = useRef(0);
+  const autoNextTimeoutRef = useRef<number | null>(null);
   const autoNextRoundRef = useRef<number | null>(null);
   const syncedDiscussionMinutes = state?.settings.discussionMinutes;
   const syncedImposters = state?.settings.imposters;
@@ -334,9 +335,9 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   }, [normalizedRoomCode, sessionId, uiLanguage]);
 
   const sendAction = useCallback(
-    async (action: RoomAction) => {
+    async (action: RoomAction): Promise<RoomView | null> => {
       if (!sessionId) {
-        return;
+        return null;
       }
 
       setWorkingAction(action.type);
@@ -354,14 +355,27 @@ export function RoomClient({ roomCode }: RoomClientProps) {
         if (action.type === "leave_room") {
           router.push("/");
         }
+
+        return response.state;
       } catch (actionError) {
         setError(actionError instanceof Error ? actionError.message : COPY[uiLanguage].actionFailed);
+        return null;
       } finally {
         setWorkingAction(null);
       }
     },
     [normalizedRoomCode, router, sessionId, uiLanguage]
   );
+
+  useEffect(() => {
+    return () => {
+      if (autoNextTimeoutRef.current) {
+        window.clearTimeout(autoNextTimeoutRef.current);
+      }
+
+      autoNextRoundRef.current = null;
+    };
+  }, []);
 
   async function handleJoinRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -428,6 +442,32 @@ export function RoomClient({ roomCode }: RoomClientProps) {
   const roundFakeFacts = state?.round?.facts?.fake ?? [];
   const totalRoundFacts = roundRealFacts.length + roundFakeFacts.length;
 
+  useEffect(() => {
+    if (!isSoloTrueFalse || phase !== "results" || !state?.round?.roundNumber) {
+      if (autoNextTimeoutRef.current) {
+        window.clearTimeout(autoNextTimeoutRef.current);
+        autoNextTimeoutRef.current = null;
+      }
+
+      return;
+    }
+
+    if (autoNextRoundRef.current === state.round.roundNumber) {
+      return;
+    }
+
+    autoNextRoundRef.current = state.round.roundNumber;
+
+    if (autoNextTimeoutRef.current) {
+      window.clearTimeout(autoNextTimeoutRef.current);
+    }
+
+    autoNextTimeoutRef.current = window.setTimeout(() => {
+      autoNextTimeoutRef.current = null;
+      void sendAction({ type: "play_again" });
+    }, SOLO_TRUE_FALSE_NEXT_DELAY_MS);
+  }, [isSoloTrueFalse, phase, sendAction, state?.round?.roundNumber]);
+
   const playersById = useMemo(() => {
     if (!state) {
       return {} as Record<string, string>;
@@ -436,31 +476,9 @@ export function RoomClient({ roomCode }: RoomClientProps) {
     return Object.fromEntries(state.players.map((player) => [player.id, player.displayName]));
   }, [state]);
 
-  useEffect(() => {
-    if (!state?.joined || !isSoloTrueFalse || state.phase !== "results") {
-      return;
-    }
-
-    const roundNumber = state.round?.roundNumber ?? null;
-
-    if (roundNumber === null) {
-      return;
-    }
-
-    if (autoNextRoundRef.current === roundNumber) {
-      return;
-    }
-
-    autoNextRoundRef.current = roundNumber;
-
-    const timeout = window.setTimeout(() => {
-      void sendAction({ type: "play_again" });
-    }, SOLO_TRUE_FALSE_NEXT_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [isSoloTrueFalse, sendAction, state?.joined, state?.phase, state?.round?.roundNumber]);
+  async function handleTrueFalseAnswer(answer: "true" | "false") {
+    await sendAction({ type: "answer_true_false", answer });
+  }
 
   if (!sessionId || (loading && !state)) {
     return (
@@ -779,7 +797,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 <button
                   className={state.round?.myAnswer === "true" ? "vote-option active" : "vote-option"}
                   type="button"
-                  onClick={() => sendAction({ type: "answer_true_false", answer: "true" })}
+                  onClick={() => handleTrueFalseAnswer("true")}
                   disabled={workingAction === "answer_true_false"}
                 >
                   {copy.answerTrue}
@@ -787,7 +805,7 @@ export function RoomClient({ roomCode }: RoomClientProps) {
                 <button
                   className={state.round?.myAnswer === "false" ? "vote-option active" : "vote-option"}
                   type="button"
-                  onClick={() => sendAction({ type: "answer_true_false", answer: "false" })}
+                  onClick={() => handleTrueFalseAnswer("false")}
                   disabled={workingAction === "answer_true_false"}
                 >
                   {copy.answerFalse}
